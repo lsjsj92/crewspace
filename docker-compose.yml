@@ -1,19 +1,19 @@
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: planship-postgres
+    container_name: crewspace-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-planship}
-      POSTGRES_USER: ${POSTGRES_USER:-planship}
+      POSTGRES_DB: ${POSTGRES_DB:-crewspace}
+      POSTGRES_USER: ${POSTGRES_USER:-crewspace}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme_strong_password}
       TZ: Asia/Seoul
     volumes:
-      - planship_pgdata:/var/lib/postgresql/data
+      - crewspace_pgdata:/var/lib/postgresql/data
     ports:
       - "${HOST_POSTGRES_PORT:-5432}:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-planship}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-crewspace}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -22,7 +22,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: planship-backend
+    container_name: crewspace-backend
     restart: unless-stopped
     env_file:
       - .env
@@ -40,7 +40,7 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    container_name: planship-frontend
+    container_name: crewspace-frontend
     restart: unless-stopped
     ports:
       - "${HOST_FRONTEND_PORT:-3000}:80"
@@ -48,5 +48,5 @@ services:
       - backend
 
 volumes:
-  planship_pgdata:
-    name: planship_pgdata
+  crewspace_pgdata:
+    name: crewspace_pgdata

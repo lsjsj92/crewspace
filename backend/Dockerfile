@@ -1,5 +1,5 @@
 # backend/Dockerfile
-# Planship 백엔드 컨테이너 이미지
+# Crewspace 백엔드 컨테이너 이미지
 FROM python:3.12-slim
 
 WORKDIR /app

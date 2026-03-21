@@ -9,3 +9,8 @@ dist/
 *.md
 .vscode/
 .idea/
+coverage/
+*.log
+.DS_Store
+.eslintcache
+.claude/
