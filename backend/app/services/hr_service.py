@@ -120,7 +120,7 @@ async def import_from_excel(
             user_for_team = existing_user
             updated_count += 1
         else:
-            email = f"{gw_id}@planship.local"
+            email = f"{gw_id}@crewspace.local"
             default_password = app_config.hr_default_password
             password_hash_val = hash_password(default_password)
 

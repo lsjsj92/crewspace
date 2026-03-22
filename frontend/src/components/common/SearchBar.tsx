@@ -3,6 +3,7 @@ import { Input, Modal, List, Tag, Typography, Empty, Spin } from 'antd';
 import { ProjectOutlined, FileTextOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { searchAll, type SearchResult } from '@/api/search';
+import { getCardTypeColor } from '@/constants/cardTypes';
 
 const { Search } = Input;
 const { Text } = Typography;
@@ -84,7 +85,7 @@ const SearchBar: React.FC = () => {
                         {item.type === 'project' ? 'Project' : 'Card'}
                       </Tag>
                       {item.type === 'card' && item.card_type && (
-                        <Tag>{item.card_type}</Tag>
+                        <Tag color={getCardTypeColor(item.card_type)}>{item.card_type}</Tag>
                       )}
                     </span>
                   }

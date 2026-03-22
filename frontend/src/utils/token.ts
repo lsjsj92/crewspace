@@ -1,5 +1,5 @@
-const ACCESS_TOKEN_KEY = 'planship_access_token';
-const REFRESH_TOKEN_KEY = 'planship_refresh_token';
+const ACCESS_TOKEN_KEY = 'crewspace_access_token';
+const REFRESH_TOKEN_KEY = 'crewspace_refresh_token';
 
 export function getAccessToken(): string | null {
   return localStorage.getItem(ACCESS_TOKEN_KEY);

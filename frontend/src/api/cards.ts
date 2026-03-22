@@ -79,3 +79,23 @@ export async function addLabel(cardId: string, labelId: string): Promise<void> {
 export async function removeLabel(cardId: string, labelId: string): Promise<void> {
   await apiClient.delete(`/cards/${cardId}/labels/${labelId}`);
 }
+
+export async function checkDuplicateTitle(
+  projectId: string,
+  title: string,
+  cardType: string,
+  excludeCardId?: string,
+): Promise<{ has_duplicate: boolean; count: number; cards: { id: string; card_number: number; title: string }[] }> {
+  const response = await apiClient.get(`/projects/${projectId}/cards/check-duplicate`, {
+    params: { title, card_type: cardType, exclude_card_id: excludeCardId },
+  });
+  return response.data;
+}
+
+export async function reorderCard(
+  cardId: string,
+  data: { parent_id?: string | null; after_card_id?: string | null }
+): Promise<Card> {
+  const response = await apiClient.post<Card>(`/cards/${cardId}/reorder`, data);
+  return response.data;
+}

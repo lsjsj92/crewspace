@@ -2,6 +2,7 @@ from uuid import UUID
 
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.config import get_app_config
 from app.exceptions.base import BadRequestException, NotFoundException
@@ -15,14 +16,15 @@ from app.schemas.board import (
     ColumnUpdateRequest,
     ColumnWithCardsResponse,
 )
-from app.schemas.card import CardResponse
+from app.schemas.card import CardAssigneeResponse, CardResponse
 from app.services.project_permission_service import check_project_permission
 
 
 def _card_to_response(card: Card, prefix: str) -> CardResponse:
-    """Convert a Card model to CardResponse with project prefix."""
+    """Card 모델을 CardResponse로 변환하고 프로젝트 prefix와 assignees를 설정한다."""
     resp = CardResponse.model_validate(card)
     resp.prefix = prefix
+    resp.assignees = [CardAssigneeResponse.model_validate(a) for a in (card.assignees or [])]
     return resp
 
 
@@ -73,6 +75,7 @@ async def get_board(db: AsyncSession, project_id: UUID, current_user: User | Non
     result: list[ColumnWithCardsResponse] = []
     for col in columns:
         # Get non-archived cards for this column, sorted by position
+        # assignees를 함께 로드하여 N+1 쿼리를 방지한다
         cards_result = await db.execute(
             select(Card)
             .where(
@@ -80,6 +83,7 @@ async def get_board(db: AsyncSession, project_id: UUID, current_user: User | Non
                 Card.archived_at.is_(None),
                 Card.deleted_at.is_(None),
             )
+            .options(selectinload(Card.assignees))
             .order_by(Card.position)
         )
         cards = list(cards_result.scalars().all())

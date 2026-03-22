@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Typography, Segmented, Spin, Breadcrumb } from 'antd';
 import {
@@ -7,8 +7,9 @@ import {
   SettingOutlined,
 } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
-import { getProject } from '@/api/projects';
+import { getProject, getProjectMembers } from '@/api/projects';
 import KanbanBoard from '@/components/board/KanbanBoard';
+import BoardFilterBar, { BoardFilters, EMPTY_FILTERS } from '@/components/common/BoardFilterBar';
 
 const { Title } = Typography;
 
@@ -21,6 +22,21 @@ const ProjectBoardPage: React.FC = () => {
     queryFn: () => getProject(id!),
     enabled: !!id,
   });
+
+  const { data: members } = useQuery({
+    queryKey: ['project-members', id],
+    queryFn: () => getProjectMembers(id!),
+    enabled: !!id,
+  });
+
+  const [filters, setFilters] = useState<BoardFilters>(EMPTY_FILTERS);
+
+  const memberOptions = useMemo(() => {
+    return (members || []).map((m: { user_id: string; user?: { display_name?: string; username?: string } }) => ({
+      user_id: m.user_id,
+      display_name: m.user?.display_name || m.user?.username || 'Unknown',
+    }));
+  }, [members]);
 
   const handleViewChange = (value: string | number) => {
     if (!id) return;
@@ -82,10 +98,17 @@ const ProjectBoardPage: React.FC = () => {
         />
       </div>
 
+      <BoardFilterBar
+        filters={filters}
+        onFilterChange={setFilters}
+        members={memberOptions}
+      />
+
       <KanbanBoard
         projectId={id}
         teamId={project.team_id}
         prefix={project.prefix}
+        filters={filters}
       />
     </div>
   );

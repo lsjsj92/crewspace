@@ -66,7 +66,7 @@ export interface BoardColumn {
   cards?: Card[];
 }
 
-export type CardType = 'epic' | 'story' | 'task';
+export type CardType = 'epic' | 'story' | 'task' | 'sub_task';
 export type CardPriority = 'lowest' | 'low' | 'medium' | 'high' | 'highest';
 
 export interface Card {
@@ -74,6 +74,12 @@ export interface Card {
   project_id: string;
   column_id: string;
   parent_id: string | null;
+  parent?: {
+    id: string;
+    card_type: CardType;
+    card_number: number;
+    title: string;
+  } | null;
   card_type: CardType;
   card_number: number;
   title: string;

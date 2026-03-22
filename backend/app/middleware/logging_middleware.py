@@ -7,7 +7,7 @@ from starlette.responses import Response
 
 from app.utils.datetime_utils import now_kst
 
-logger = logging.getLogger("planship.access")
+logger = logging.getLogger("crewspace.access")
 
 
 class LoggingMiddleware(BaseHTTPMiddleware):

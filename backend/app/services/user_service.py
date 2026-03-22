@@ -6,7 +6,7 @@ from app.exceptions.base import ConflictException, NotFoundException
 from app.models.user import User
 from app.repositories.user_repository import UserRepository
 from app.schemas.auth import UserResponse
-from app.schemas.user import UserUpdateRequest
+from app.schemas.user import AdminUserUpdateRequest, UserUpdateRequest
 from app.utils.security import hash_password
 
 
@@ -30,6 +30,33 @@ async def update_user(db: AsyncSession, user_id: UUID, data: UserUpdateRequest) 
     user = await user_repo.update(user_id, **update_data)
     if not user:
         raise NotFoundException(detail="User not found")
+    return UserResponse.model_validate(user)
+
+
+async def admin_update_user(
+    db: AsyncSession, user_id: UUID, data: AdminUserUpdateRequest
+) -> UserResponse:
+    """Admin update: can modify email, username, display_name, etc. with duplicate checks."""
+    user_repo = UserRepository(db)
+    user = await user_repo.get_by_id(user_id)
+    if not user:
+        raise NotFoundException(detail="User not found")
+
+    update_data = data.model_dump(exclude_unset=True)
+    if not update_data:
+        return UserResponse.model_validate(user)
+
+    if "email" in update_data and update_data["email"] != user.email:
+        existing = await user_repo.get_by_email(update_data["email"])
+        if existing:
+            raise ConflictException(detail="Email already registered")
+
+    if "username" in update_data and update_data["username"] != user.username:
+        existing = await user_repo.get_by_username(update_data["username"])
+        if existing:
+            raise ConflictException(detail="Username already taken")
+
+    user = await user_repo.update(user_id, **update_data)
     return UserResponse.model_validate(user)
 
 

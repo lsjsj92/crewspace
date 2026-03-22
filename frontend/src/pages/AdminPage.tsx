@@ -4,11 +4,11 @@ import {
   Modal, Form, Input, Select, Popconfirm,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { PlusOutlined, UploadOutlined, DeleteOutlined, LockOutlined } from '@ant-design/icons';
+import { PlusOutlined, UploadOutlined, DeleteOutlined, LockOutlined, EditOutlined } from '@ant-design/icons';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   getUsers, updateUser, deactivateUser, createUser, importHR,
-  deleteTeam, resetUserPassword,
+  deleteTeam, resetUserPassword, adminUpdateUser,
 } from '@/api/admin';
 import { getMyTeams } from '@/api/teams';
 import { getProjects, createProject } from '@/api/projects';
@@ -28,7 +28,10 @@ const AdminPage: React.FC = () => {
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
   const [resetPasswordOpen, setResetPasswordOpen] = useState(false);
   const [resetPasswordUserId, setResetPasswordUserId] = useState<string | null>(null);
+  const [editUserOpen, setEditUserOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
   const [userForm] = Form.useForm();
+  const [editUserForm] = Form.useForm();
   const [projectForm] = Form.useForm();
   const [passwordForm] = Form.useForm();
 
@@ -170,6 +173,45 @@ const AdminPage: React.FC = () => {
     }
   };
 
+  const openEditUserModal = (record: User) => {
+    setEditingUser(record);
+    editUserForm.setFieldsValue({
+      email: record.email,
+      username: record.username,
+      display_name: record.display_name,
+      is_active: record.is_active,
+      is_superadmin: record.is_superadmin,
+      employee_id: record.employee_id || '',
+      organization: record.organization || '',
+      gw_id: record.gw_id || '',
+    });
+    setEditUserOpen(true);
+  };
+
+  const handleEditUser = async (values: Record<string, unknown>) => {
+    if (!editingUser) return;
+    try {
+      const data: Record<string, unknown> = {};
+      if (values.email !== editingUser.email) data.email = values.email;
+      if (values.username !== editingUser.username) data.username = values.username;
+      if (values.display_name !== editingUser.display_name) data.display_name = values.display_name;
+      if (values.is_active !== editingUser.is_active) data.is_active = values.is_active;
+      if (values.is_superadmin !== editingUser.is_superadmin) data.is_superadmin = values.is_superadmin;
+      data.employee_id = (values.employee_id as string) || null;
+      data.organization = (values.organization as string) || null;
+      data.gw_id = (values.gw_id as string) || null;
+
+      await adminUpdateUser(editingUser.id, data as Parameters<typeof adminUpdateUser>[1]);
+      message.success('User updated');
+      setEditUserOpen(false);
+      setEditingUser(null);
+      editUserForm.resetFields();
+      fetchUsers();
+    } catch {
+      message.error('Failed to update user');
+    }
+  };
+
   const openResetPasswordModal = (userId: string) => {
     setResetPasswordUserId(userId);
     setResetPasswordOpen(true);
@@ -235,6 +277,14 @@ const AdminPage: React.FC = () => {
       key: 'actions',
       render: (_, record) => (
         <Space>
+          <Button
+            type="text"
+            size="small"
+            icon={<EditOutlined />}
+            onClick={() => openEditUserModal(record)}
+          >
+            Edit
+          </Button>
           <Switch
             checked={record.is_active}
             onChange={() => handleToggleActive(record)}
@@ -452,6 +502,48 @@ const AdminPage: React.FC = () => {
                 .filter((u) => u.is_active)
                 .map((u) => ({ value: u.id, label: `${u.display_name} (${u.username})` }))}
             />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* Edit User Modal */}
+      <Modal
+        title="Edit User"
+        open={editUserOpen}
+        onCancel={() => {
+          setEditUserOpen(false);
+          setEditingUser(null);
+          editUserForm.resetFields();
+        }}
+        onOk={() => editUserForm.submit()}
+        width={520}
+      >
+        <Form form={editUserForm} layout="vertical" onFinish={handleEditUser}>
+          <Form.Item name="email" label="Email" rules={[{ required: true, type: 'email' }]}>
+            <Input />
+          </Form.Item>
+          <Form.Item name="username" label="Username" rules={[{ required: true }]}>
+            <Input />
+          </Form.Item>
+          <Form.Item name="display_name" label="Display Name" rules={[{ required: true }]}>
+            <Input />
+          </Form.Item>
+          <Space size={16}>
+            <Form.Item name="is_active" label="Active" valuePropName="checked">
+              <Switch disabled={editingUser?.id === currentUser?.id} />
+            </Form.Item>
+            <Form.Item name="is_superadmin" label="Superadmin" valuePropName="checked">
+              <Switch disabled={editingUser?.id === currentUser?.id} />
+            </Form.Item>
+          </Space>
+          <Form.Item name="employee_id" label="Employee ID">
+            <Input />
+          </Form.Item>
+          <Form.Item name="organization" label="Organization">
+            <Input />
+          </Form.Item>
+          <Form.Item name="gw_id" label="GW ID">
+            <Input />
           </Form.Item>
         </Form>
       </Modal>

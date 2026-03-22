@@ -8,6 +8,17 @@ class UserUpdateRequest(BaseModel):
     is_active: bool | None = None
 
 
+class AdminUserUpdateRequest(BaseModel):
+    email: EmailStr | None = None
+    username: str | None = Field(None, min_length=1, max_length=100)
+    display_name: str | None = Field(None, min_length=1, max_length=200)
+    is_active: bool | None = None
+    is_superadmin: bool | None = None
+    employee_id: str | None = None
+    organization: str | None = None
+    gw_id: str | None = None
+
+
 class UserListResponse(BaseModel):
     users: list[UserResponse]
 

@@ -23,6 +23,7 @@ class CardType(enum.Enum):
     epic = "epic"
     story = "story"
     task = "task"
+    sub_task = "sub_task"
 
 
 class CardPriority(enum.Enum):

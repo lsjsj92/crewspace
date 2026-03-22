@@ -38,6 +38,7 @@ class CardRepository(BaseRepository[Card]):
             from app.models.card import CardAssignee
             stmt = stmt.join(CardAssignee).where(CardAssignee.user_id == assignee_id)
 
+        stmt = stmt.order_by(Card.position)
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
@@ -72,12 +73,54 @@ class CardRepository(BaseRepository[Card]):
         )
         return list(result.scalars().all())
 
+    async def find_by_title(
+        self,
+        project_id: UUID,
+        title: str,
+        card_type: str,
+        exclude_card_id: UUID | None = None,
+    ) -> list[Card]:
+        """Find cards with the same title and type in the project."""
+        stmt = select(Card).where(
+            Card.project_id == project_id,
+            Card.title == title,
+            Card.card_type == CardType(card_type),
+            Card.deleted_at.is_(None),
+        )
+        if exclude_card_id:
+            stmt = stmt.where(Card.id != exclude_card_id)
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())
+
+    async def get_siblings(
+        self,
+        project_id: UUID,
+        parent_id: UUID | None,
+        exclude_card_id: UUID,
+    ) -> list[Card]:
+        """같은 parent_id를 가진 형제 카드 목록을 position 순으로 반환한다."""
+        parent_filter = Card.parent_id == parent_id if parent_id is not None else Card.parent_id.is_(None)
+        stmt = (
+            select(Card)
+            .where(
+                Card.project_id == project_id,
+                parent_filter,
+                Card.id != exclude_card_id,
+                Card.deleted_at.is_(None),
+                Card.archived_at.is_(None),
+            )
+            .order_by(Card.position)
+        )
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())
+
     async def get_card_with_details(self, card_id: UUID) -> Card | None:
         """Fetch a card with all relationships loaded."""
         result = await self.session.execute(
             select(Card)
             .where(Card.id == card_id)
             .options(
+                selectinload(Card.parent),
                 selectinload(Card.assignees),
                 selectinload(Card.labels),
                 selectinload(Card.children),

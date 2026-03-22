@@ -55,7 +55,7 @@ const LoginPage: React.FC = () => {
       <Card style={{ width: 400, boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }}>
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
           <Title level={2} style={{ marginBottom: 4 }}>
-            Planship
+            Crewspace
           </Title>
           <Text type="secondary">{isRegister ? 'Create your account' : 'Sign in to your account'}</Text>
         </div>

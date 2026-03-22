@@ -5,15 +5,9 @@ import { CSS } from '@dnd-kit/utilities';
 import { ClockCircleOutlined } from '@ant-design/icons';
 import type { Card } from '@/types';
 import { formatDate, isOverdue } from '@/utils/date';
+import { getCardTypeColor, getCardTypeIcon, getCardTypeLabel } from '@/constants/cardTypes';
 
 const { Text } = Typography;
-
-const CARD_TYPE_COLORS: Record<string, string> = {
-  epic: '#722ed1',
-  story: '#1890ff',
-  task: '#52c41a',
-  bug: '#f5222d',
-};
 
 const PRIORITY_COLORS: Record<string, string> = {
   lowest: '#8c8c8c',
@@ -56,8 +50,8 @@ const CardItem: React.FC<CardItemProps> = ({ card, prefix, onClick }) => {
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isDragging ? 0.5 : 1,
-    cursor: 'grab',
+    opacity: isDragging ? 0.3 : 1,
+    cursor: isDragging ? 'grabbing' : 'grab',
     marginBottom: 8,
   };
 
@@ -69,16 +63,17 @@ const CardItem: React.FC<CardItemProps> = ({ card, prefix, onClick }) => {
         size="small"
         hoverable
         onClick={() => onClick(card)}
-        style={{ borderLeft: `3px solid ${CARD_TYPE_COLORS[card.card_type] || '#d9d9d9'}` }}
+        style={{ borderLeft: `3px solid ${getCardTypeColor(card.card_type)}` }}
         bodyStyle={{ padding: '8px 12px' }}
       >
         <Space direction="vertical" size={4} style={{ width: '100%' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <Tag
-              color={CARD_TYPE_COLORS[card.card_type]}
+              color={getCardTypeColor(card.card_type)}
               style={{ margin: 0, fontSize: 10, lineHeight: '16px', padding: '0 4px' }}
             >
-              {card.card_type.toUpperCase()}
+              {React.createElement(getCardTypeIcon(card.card_type), { style: { marginRight: 2, fontSize: 10 } })}
+              {getCardTypeLabel(card.card_type)}
             </Tag>
             <Text type="secondary" style={{ fontSize: 11 }}>
               {prefix}-{card.card_number}

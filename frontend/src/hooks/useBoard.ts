@@ -84,6 +84,8 @@ export function useCreateCard(projectId: string | undefined) {
       column_id?: string;
       parent_id?: string | null;
       priority?: CardPriority;
+      start_date?: string | null;
+      due_date?: string | null;
     }) => apiCreateCard(projectId!, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['board', projectId] });
@@ -106,6 +108,7 @@ export function useUpdateCard(projectId: string | undefined) {
         priority?: CardPriority;
         start_date?: string | null;
         due_date?: string | null;
+        parent_id?: string | null;
       };
     }) => apiUpdateCard(cardId, data),
     onSuccess: () => {

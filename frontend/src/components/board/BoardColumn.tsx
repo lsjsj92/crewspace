@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
-import { Typography, Button, Badge, Input, Space } from 'antd';
-import { PlusOutlined } from '@ant-design/icons';
+import React, { useMemo, useState } from 'react';
+import { Typography, Button, Badge, Space } from 'antd';
+import { PlusOutlined, DownOutlined } from '@ant-design/icons';
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import dayjs from 'dayjs';
 import type { BoardColumn as BoardColumnType, Card } from '@/types';
 import CardItem from './CardItem';
 
@@ -12,7 +13,8 @@ interface BoardColumnProps {
   column: BoardColumnType;
   prefix: string;
   onCardClick: (card: Card) => void;
-  onAddCard: (columnId: string, title: string) => void;
+  onAddCard: (columnId: string) => void;
+  completedVisibleDays?: number;
 }
 
 const BoardColumn: React.FC<BoardColumnProps> = ({
@@ -20,10 +22,8 @@ const BoardColumn: React.FC<BoardColumnProps> = ({
   prefix,
   onCardClick,
   onAddCard,
+  completedVisibleDays = 3,
 }) => {
-  const [isAdding, setIsAdding] = useState(false);
-  const [newCardTitle, setNewCardTitle] = useState('');
-
   const { setNodeRef, isOver } = useDroppable({
     id: `column-${column.id}`,
     data: {
@@ -31,27 +31,30 @@ const BoardColumn: React.FC<BoardColumnProps> = ({
       column,
     },
   });
+  const [showOlder, setShowOlder] = useState(false);
 
-  const cards = column.cards || [];
-  const cardCount = cards.length;
+  const allCards = column.cards || [];
+
+  // End column: 최근 완료 카드와 오래된 완료 카드 분리
+  const { visibleCards, olderCompletedCards } = useMemo(() => {
+    if (!column.is_end || completedVisibleDays <= 0) {
+      return { visibleCards: allCards, olderCompletedCards: [] };
+    }
+    const cutoff = dayjs().subtract(completedVisibleDays, 'day');
+    const visible: Card[] = [];
+    const older: Card[] = [];
+    for (const card of allCards) {
+      if (card.completed_at && dayjs(card.completed_at).isBefore(cutoff)) {
+        older.push(card);
+      } else {
+        visible.push(card);
+      }
+    }
+    return { visibleCards: visible, olderCompletedCards: older };
+  }, [allCards, column.is_end, completedVisibleDays]);
+
+  const cardCount = allCards.length;
   const isOverWip = column.wip_limit !== null && cardCount > column.wip_limit;
-
-  const handleAddCard = () => {
-    if (newCardTitle.trim()) {
-      onAddCard(column.id, newCardTitle.trim());
-      setNewCardTitle('');
-      setIsAdding(false);
-    }
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      handleAddCard();
-    } else if (e.key === 'Escape') {
-      setNewCardTitle('');
-      setIsAdding(false);
-    }
-  };
 
   return (
     <div
@@ -109,10 +112,10 @@ const BoardColumn: React.FC<BoardColumnProps> = ({
         }}
       >
         <SortableContext
-          items={cards.map((c) => `card-${c.id}`)}
+          items={visibleCards.map((c) => `card-${c.id}`)}
           strategy={verticalListSortingStrategy}
         >
-          {cards.map((card) => (
+          {visibleCards.map((card) => (
             <CardItem
               key={card.id}
               card={card}
@@ -121,48 +124,38 @@ const BoardColumn: React.FC<BoardColumnProps> = ({
             />
           ))}
         </SortableContext>
+        {olderCompletedCards.length > 0 && (
+          <div style={{ marginTop: 4 }}>
+            <Button
+              type="text"
+              size="small"
+              icon={<DownOutlined rotate={showOlder ? 180 : 0} style={{ fontSize: 10, transition: 'transform 0.2s' }} />}
+              onClick={() => setShowOlder(!showOlder)}
+              style={{ width: '100%', color: '#8c8c8c', fontSize: 12 }}
+            >
+              {showOlder ? '숨기기' : `완료된 카드 (${olderCompletedCards.length}건)`}
+            </Button>
+            {showOlder && olderCompletedCards.map((card) => (
+              <CardItem
+                key={card.id}
+                card={card}
+                prefix={prefix}
+                onClick={onCardClick}
+              />
+            ))}
+          </div>
+        )}
       </div>
 
-      {isAdding ? (
-        <div style={{ padding: '4px 4px 0' }}>
-          <Input
-            autoFocus
-            placeholder="Enter card title..."
-            value={newCardTitle}
-            onChange={(e) => setNewCardTitle(e.target.value)}
-            onKeyDown={handleKeyDown}
-            onBlur={() => {
-              if (!newCardTitle.trim()) {
-                setIsAdding(false);
-              }
-            }}
-          />
-          <Space style={{ marginTop: 4 }}>
-            <Button type="primary" size="small" onClick={handleAddCard}>
-              Add
-            </Button>
-            <Button
-              size="small"
-              onClick={() => {
-                setNewCardTitle('');
-                setIsAdding(false);
-              }}
-            >
-              Cancel
-            </Button>
-          </Space>
-        </div>
-      ) : (
-        <Button
-          type="text"
-          icon={<PlusOutlined />}
-          style={{ marginTop: 4 }}
-          onClick={() => setIsAdding(true)}
-          block
-        >
-          Add card
-        </Button>
-      )}
+      <Button
+        type="text"
+        icon={<PlusOutlined />}
+        style={{ marginTop: 4 }}
+        onClick={() => onAddCard(column.id)}
+        block
+      >
+        Add card
+      </Button>
     </div>
   );
 };

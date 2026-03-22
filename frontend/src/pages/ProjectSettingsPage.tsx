@@ -13,7 +13,7 @@ import {
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import dayjs from 'dayjs';
 import { getProject, updateProject, completeProject } from '@/api/projects';
-import { createColumn, deleteColumn, reorderColumns } from '@/api/boards';
+import { createColumn, updateColumn, deleteColumn, reorderColumns } from '@/api/boards';
 import { getLabels, createLabel, deleteLabel } from '@/api/labels';
 import { useBoard } from '@/hooks/useBoard';
 import {
@@ -37,6 +37,8 @@ const ProjectSettingsPage: React.FC = () => {
   const [projectForm] = Form.useForm();
   const [labelForm] = Form.useForm();
   const [columnName, setColumnName] = useState('');
+  const [editingColumnId, setEditingColumnId] = useState<string | null>(null);
+  const [editingColumnName, setEditingColumnName] = useState('');
   const [outcomeOpen, setOutcomeOpen] = useState(false);
   const [outcomeForm] = Form.useForm();
   const [addMemberOpen, setAddMemberOpen] = useState(false);
@@ -104,6 +106,16 @@ const ProjectSettingsPage: React.FC = () => {
     },
   });
 
+  const updateColumnMutation = useMutation({
+    mutationFn: ({ columnId, data }: { columnId: string; data: { name?: string; wip_limit?: number | null } }) =>
+      updateColumn(id!, columnId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['board', id] });
+      setEditingColumnId(null);
+      message.success('Column updated');
+    },
+  });
+
   const deleteColumnMutation = useMutation({
     mutationFn: (columnId: string) => deleteColumn(id!, columnId),
     onSuccess: () => {
@@ -117,6 +129,10 @@ const ProjectSettingsPage: React.FC = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['board', id] });
     },
+    onError: () => {
+      message.error('Failed to reorder columns');
+      queryClient.invalidateQueries({ queryKey: ['board', id] });
+    },
   });
 
   const handleMoveColumn = (index: number, direction: 'up' | 'down') => {
@@ -124,6 +140,12 @@ const ProjectSettingsPage: React.FC = () => {
     const sorted = [...columns].sort((a, b) => a.position - b.position);
     const targetIndex = direction === 'up' ? index - 1 : index + 1;
     if (targetIndex < 0 || targetIndex >= sorted.length) return;
+
+    const movingColumn = sorted[index];
+    const displacedColumn = sorted[targetIndex];
+    if (movingColumn.is_end && direction === 'up') return;
+    if (displacedColumn.is_end && direction === 'down') return;
+
     const newOrder = sorted.map((c) => c.id);
     [newOrder[index], newOrder[targetIndex]] = [newOrder[targetIndex], newOrder[index]];
     reorderColumnsMutation.mutate(newOrder);
@@ -348,12 +370,55 @@ const ProjectSettingsPage: React.FC = () => {
       {/* Columns */}
       <Card title="Board Columns" style={{ marginBottom: 16 }}>
         <Table
-          dataSource={columns || []}
+          dataSource={(columns || []).slice().sort((a, b) => a.position - b.position)}
           rowKey="id"
           pagination={false}
           size="small"
           columns={[
-            { title: 'Name', dataIndex: 'name' },
+            {
+              title: 'Name',
+              dataIndex: 'name',
+              render: (name: string, record: BoardColumn) => {
+                if (editingColumnId === record.id) {
+                  return (
+                    <Input
+                      size="small"
+                      value={editingColumnName}
+                      onChange={(e) => setEditingColumnName(e.target.value)}
+                      onPressEnter={() => {
+                        if (editingColumnName.trim() && editingColumnName !== name) {
+                          updateColumnMutation.mutate({ columnId: record.id, data: { name: editingColumnName.trim() } });
+                        } else {
+                          setEditingColumnId(null);
+                        }
+                      }}
+                      onBlur={() => {
+                        if (editingColumnName.trim() && editingColumnName !== name) {
+                          updateColumnMutation.mutate({ columnId: record.id, data: { name: editingColumnName.trim() } });
+                        } else {
+                          setEditingColumnId(null);
+                        }
+                      }}
+                      autoFocus
+                      style={{ width: 150 }}
+                    />
+                  );
+                }
+                return (
+                  <span
+                    style={{ cursor: isManager ? 'pointer' : 'default' }}
+                    onClick={() => {
+                      if (isManager) {
+                        setEditingColumnId(record.id);
+                        setEditingColumnName(name);
+                      }
+                    }}
+                  >
+                    {name}
+                  </span>
+                );
+              },
+            },
             { title: 'Position', dataIndex: 'position' },
             {
               title: 'End Column',
@@ -365,24 +430,28 @@ const ProjectSettingsPage: React.FC = () => {
               title: 'Order',
               key: 'order',
               width: 100,
-              render: (_: unknown, _record: BoardColumn, index: number) => (
-                <Space size={4}>
-                  <Button
-                    type="text"
-                    size="small"
-                    icon={<UpOutlined />}
-                    disabled={index === 0}
-                    onClick={() => handleMoveColumn(index, 'up')}
-                  />
-                  <Button
-                    type="text"
-                    size="small"
-                    icon={<DownOutlined />}
-                    disabled={!columns || index >= columns.length - 1}
-                    onClick={() => handleMoveColumn(index, 'down')}
-                  />
-                </Space>
-              ),
+              render: (_: unknown, record: BoardColumn, index: number) => {
+                const sortedCols = (columns || []).slice().sort((a, b) => a.position - b.position);
+                const nextIsEnd = index < sortedCols.length - 1 && sortedCols[index + 1]?.is_end;
+                return (
+                  <Space size={4}>
+                    <Button
+                      type="text"
+                      size="small"
+                      icon={<UpOutlined />}
+                      disabled={index === 0 || record.is_end}
+                      onClick={() => handleMoveColumn(index, 'up')}
+                    />
+                    <Button
+                      type="text"
+                      size="small"
+                      icon={<DownOutlined />}
+                      disabled={!columns || index >= (columns.length - 1) || nextIsEnd || record.is_end}
+                      onClick={() => handleMoveColumn(index, 'down')}
+                    />
+                  </Space>
+                );
+              },
             },
             {
               title: 'Actions',

@@ -24,8 +24,8 @@ class Settings(BaseSettings):
     # PostgreSQL
     POSTGRES_HOST: str = "localhost"
     POSTGRES_PORT: int = 5432
-    POSTGRES_DB: str = "planship"
-    POSTGRES_USER: str = "planship"
+    POSTGRES_DB: str = "crewspace"
+    POSTGRES_USER: str = "crewspace"
     POSTGRES_PASSWORD: str = "changeme_strong_password"
 
     # JWT
@@ -42,7 +42,7 @@ class Settings(BaseSettings):
     CORS_ORIGINS: str = "http://localhost:3000,http://localhost:5173"
 
     # Superadmin
-    SUPERADMIN_EMAIL: str = "admin@planship.local"
+    SUPERADMIN_EMAIL: str = "admin@crewspace.local"
     SUPERADMIN_USERNAME: str = "admin"
     SUPERADMIN_PASSWORD: str = "changeme_admin_password"
 
@@ -103,6 +103,35 @@ class AppConfig:
         return self.card.get("auto_archive_days", 7)
 
     @property
+    def completed_visible_days(self) -> int:
+        return self.card.get("completed_visible_days", 3)
+
+    @property
+    def card_types(self) -> dict[str, dict]:
+        return self.card.get("types", {})
+
+    @property
+    def allowed_parents(self) -> dict[str, set[str]]:
+        return {
+            ct: set(info.get("allowed_parents", []))
+            for ct, info in self.card_types.items()
+        }
+
+    @property
+    def independent_types(self) -> set[str]:
+        return {
+            ct for ct, info in self.card_types.items()
+            if info.get("can_be_independent", True)
+        }
+
+    @property
+    def card_type_display_order(self) -> dict[str, int]:
+        return {
+            ct: info.get("display_order", 99)
+            for ct, info in self.card_types.items()
+        }
+
+    @property
     def archive_interval_hours(self) -> int:
         return self.scheduler.get("archive_interval_hours", 1)
 
@@ -116,7 +145,7 @@ class AppConfig:
 
     @property
     def hr_default_password(self) -> str:
-        return self.hr.get("default_password", "planship1234!")
+        return self.hr.get("default_password", "crewspace1234!")
 
     @property
     def sidebar(self) -> dict[str, Any]:

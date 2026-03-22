@@ -70,10 +70,14 @@ async def get_overview(
             )
         )
 
-    # Count cards assigned to current user
+    # 삭제/아카이브된 카드를 제외하고 현재 사용자에게 할당된 카드 수 조회
     my_cards_result = await db.execute(
-        select(func.count(CardAssignee.id)).where(
+        select(func.count(CardAssignee.id))
+        .join(Card, Card.id == CardAssignee.card_id)
+        .where(
             CardAssignee.user_id == current_user.id,
+            Card.deleted_at.is_(None),
+            Card.archived_at.is_(None),
         )
     )
     my_cards_count = my_cards_result.scalar_one()

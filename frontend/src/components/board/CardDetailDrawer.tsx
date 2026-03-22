@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Drawer,
   Typography,
@@ -19,12 +19,14 @@ import {
   PlusOutlined,
   UserAddOutlined,
   SendOutlined,
+  LinkOutlined,
 } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import dayjs from 'dayjs';
 import type { Card, ProjectMember, Label, CardPriority } from '@/types';
 import {
   getCard,
+  getProjectCards,
   updateCard,
   deleteCard,
   addAssignee,
@@ -36,15 +38,10 @@ import {
 import { getComments, createComment, deleteComment } from '@/api/comments';
 import { getLabels } from '@/api/labels';
 import { getProjectMembers } from '@/api/projects';
+import { getCardTypeColor, getCardTypeIcon, getCardTypeLabel, CARD_TYPE_CONFIG } from '@/constants/cardTypes';
 
 const { Title, Text, Paragraph } = Typography;
 const { TextArea } = Input;
-
-const CARD_TYPE_COLORS: Record<string, string> = {
-  epic: '#722ed1',
-  story: '#1890ff',
-  task: '#52c41a',
-};
 
 const PRIORITY_OPTIONS = [
   { value: 'lowest', label: 'Lowest' },
@@ -62,7 +59,8 @@ interface CardDetailDrawerProps {
   columnName?: string;
   open: boolean;
   onClose: () => void;
-  onCreateSubCard?: (parentId: string, columnId: string) => void;
+  onCreateSubCard?: (parentId: string, columnId: string, parentType?: string) => void;
+  onNavigateCard?: (cardId: string) => void;
 }
 
 const CardDetailDrawer: React.FC<CardDetailDrawerProps> = ({
@@ -73,6 +71,7 @@ const CardDetailDrawer: React.FC<CardDetailDrawerProps> = ({
   open,
   onClose,
   onCreateSubCard,
+  onNavigateCard,
 }) => {
   const queryClient = useQueryClient();
   const [editingTitle, setEditingTitle] = useState(false);
@@ -80,6 +79,8 @@ const CardDetailDrawer: React.FC<CardDetailDrawerProps> = ({
   const [descValue, setDescValue] = useState('');
   const [editingDesc, setEditingDesc] = useState(false);
   const [commentText, setCommentText] = useState('');
+  const [linkChildOpen, setLinkChildOpen] = useState(false);
+  const [linkParentOpen, setLinkParentOpen] = useState(false);
 
   const { data: card, isLoading: cardLoading } = useQuery<Card>({
     queryKey: ['card', cardId],
@@ -96,7 +97,7 @@ const CardDetailDrawer: React.FC<CardDetailDrawerProps> = ({
   const { data: children } = useQuery({
     queryKey: ['card-children', cardId],
     queryFn: () => getCardChildren(cardId!),
-    enabled: !!cardId && open && (card?.card_type === 'epic' || card?.card_type === 'story'),
+    enabled: !!cardId && open && (card?.card_type === 'epic' || card?.card_type === 'story' || card?.card_type === 'task'),
   });
 
   const { data: labels } = useQuery<Label[]>({
@@ -118,9 +119,86 @@ const CardDetailDrawer: React.FC<CardDetailDrawerProps> = ({
     }
   }, [card]);
 
+  // Board 및 Timeline 데이터를 모두 갱신
   const invalidateBoard = () => {
     queryClient.invalidateQueries({ queryKey: ['board', projectId] });
+    queryClient.invalidateQueries({ queryKey: ['project-cards', projectId] });
   };
+
+  // 기존 카드를 하위 카드로 연결하기 위한 프로젝트 카드 조회
+  const { data: projectCards } = useQuery<Card[]>({
+    queryKey: ['project-cards', projectId],
+    queryFn: () => getProjectCards(projectId),
+    enabled: open && (linkChildOpen || linkParentOpen),
+  });
+
+  // 하위 카드로 연결 가능한 카드 필터링
+  const validLinkableCards = useMemo(() => {
+    if (!projectCards || !card) return [];
+    const cardType = card.card_type;
+    return projectCards.filter((c) => {
+      if (c.id === card.id) return false;
+      if (c.parent_id) return false;
+      const childConfig = CARD_TYPE_CONFIG[c.card_type];
+      return childConfig?.allowedParents?.includes(cardType);
+    });
+  }, [projectCards, card]);
+
+  // 상위 카드로 연결 가능한 카드 필터링
+  const validParentCards = useMemo(() => {
+    if (!projectCards || !card) return [];
+    const allowedParents = CARD_TYPE_CONFIG[card.card_type]?.allowedParents || [];
+    if (allowedParents.length === 0) return [];
+    return projectCards.filter((c) => {
+      if (c.id === card.id) return false;
+      if (c.id === card.parent_id) return false;
+      return allowedParents.includes(c.card_type);
+    });
+  }, [projectCards, card]);
+
+  // 기존 카드를 하위 카드로 연결
+  const linkChildMutation = useMutation({
+    mutationFn: (childCardId: string) => updateCard(childCardId, { parent_id: card!.id }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['card-children', cardId] });
+      queryClient.invalidateQueries({ queryKey: ['card', cardId] });
+      invalidateBoard();
+      setLinkChildOpen(false);
+      message.success('Card linked');
+    },
+    onError: () => {
+      message.error('Failed to link card');
+    },
+  });
+
+  // 상위 카드 연결
+  const linkParentMutation = useMutation({
+    mutationFn: (parentCardId: string) => updateCard(cardId!, { parent_id: parentCardId }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['card', cardId] });
+      queryClient.invalidateQueries({ queryKey: ['card-children'] });
+      invalidateBoard();
+      setLinkParentOpen(false);
+      message.success('상위 카드가 연결되었습니다');
+    },
+    onError: () => {
+      message.error('상위 카드 연결에 실패했습니다');
+    },
+  });
+
+  // 상위 카드 연결 해제
+  const unlinkParentMutation = useMutation({
+    mutationFn: () => updateCard(cardId!, { parent_id: null }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['card', cardId] });
+      queryClient.invalidateQueries({ queryKey: ['card-children'] });
+      invalidateBoard();
+      message.success('상위 카드 연결이 해제되었습니다');
+    },
+    onError: () => {
+      message.error('연결 해제에 실패했습니다');
+    },
+  });
 
   const updateMutation = useMutation({
     mutationFn: (data: Record<string, unknown>) => updateCard(cardId!, data),
@@ -232,8 +310,9 @@ const CardDetailDrawer: React.FC<CardDetailDrawerProps> = ({
       {card && (
         <div>
           <Space style={{ marginBottom: 8 }}>
-            <Tag color={CARD_TYPE_COLORS[card.card_type]}>
-              {card.card_type.toUpperCase()}
+            <Tag color={getCardTypeColor(card.card_type)}>
+              {React.createElement(getCardTypeIcon(card.card_type), { style: { marginRight: 4, fontSize: 12 } })}
+              {getCardTypeLabel(card.card_type)}
             </Tag>
             <Text type="secondary">{prefix}-{card.card_number}</Text>
             {columnName && <Tag>{columnName}</Tag>}
@@ -394,21 +473,122 @@ const CardDetailDrawer: React.FC<CardDetailDrawerProps> = ({
 
           <Divider />
 
-          {(card.card_type === 'epic' || card.card_type === 'story') && (
+          {/* Parent Card 섹션 */}
+          {card.card_type !== 'epic' && (
+            <>
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <Text strong>상위 카드</Text>
+                  {!card.parent && CARD_TYPE_CONFIG[card.card_type]?.allowedParents?.length > 0 && (
+                    <Button
+                      size="small"
+                      icon={<LinkOutlined />}
+                      onClick={() => setLinkParentOpen(!linkParentOpen)}
+                    >
+                      상위 카드 연결
+                    </Button>
+                  )}
+                </div>
+                {card.parent ? (
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '8px 12px',
+                      background: '#fafafa',
+                      borderRadius: 4,
+                      borderLeft: `3px solid ${getCardTypeColor(card.parent.card_type)}`,
+                      cursor: 'pointer',
+                    }}
+                    onClick={() => onNavigateCard?.(card.parent!.id)}
+                  >
+                    <Space>
+                      <Tag
+                        color={getCardTypeColor(card.parent.card_type)}
+                        style={{ fontSize: 10, lineHeight: '16px', padding: '0 4px', margin: 0 }}
+                      >
+                        {React.createElement(getCardTypeIcon(card.parent.card_type), { style: { marginRight: 2, fontSize: 10 } })}
+                        {getCardTypeLabel(card.parent.card_type)}
+                      </Tag>
+                      <Text type="secondary" style={{ fontSize: 12 }}>{prefix}-{card.parent.card_number}</Text>
+                      <Text style={{ fontSize: 13 }}>{card.parent.title}</Text>
+                    </Space>
+                    {CARD_TYPE_CONFIG[card.card_type]?.canBeIndependent && (
+                      <Popconfirm
+                        title="상위 카드 연결을 해제하시겠습니까?"
+                        onConfirm={() => unlinkParentMutation.mutate()}
+                      >
+                        <Button type="text" size="small" danger icon={<DeleteOutlined />} />
+                      </Popconfirm>
+                    )}
+                  </div>
+                ) : (
+                  <>
+                    {linkParentOpen && (
+                      <Select
+                        showSearch
+                        placeholder="상위 카드 검색..."
+                        style={{ width: '100%', marginBottom: 8 }}
+                        optionFilterProp="label"
+                        value={undefined}
+                        onChange={(parentCardId: string) => linkParentMutation.mutate(parentCardId)}
+                        loading={!projectCards}
+                        options={validParentCards.map((c) => ({
+                          value: c.id,
+                          label: `${prefix}-${c.card_number}: ${c.title}`,
+                        }))}
+                        notFoundContent="연결 가능한 상위 카드가 없습니다"
+                      />
+                    )}
+                    {!linkParentOpen && <Text type="secondary">상위 카드 없음</Text>}
+                  </>
+                )}
+              </div>
+              <Divider />
+            </>
+          )}
+
+          {(card.card_type === 'epic' || card.card_type === 'story' || card.card_type === 'task') && (
             <>
               <div style={{ marginBottom: 16 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                   <Text strong>Sub-cards</Text>
-                  {onCreateSubCard && (
+                  <Space size={4}>
                     <Button
                       size="small"
-                      icon={<PlusOutlined />}
-                      onClick={() => onCreateSubCard(card.id, card.column_id)}
+                      icon={<LinkOutlined />}
+                      onClick={() => setLinkChildOpen(!linkChildOpen)}
                     >
-                      Create sub-card
+                      Link card
                     </Button>
-                  )}
+                    {onCreateSubCard && (
+                      <Button
+                        size="small"
+                        icon={<PlusOutlined />}
+                        onClick={() => onCreateSubCard(card.id, card.column_id, card.card_type)}
+                      >
+                        Create sub-card
+                      </Button>
+                    )}
+                  </Space>
                 </div>
+                {linkChildOpen && (
+                  <Select
+                    showSearch
+                    placeholder="Search cards to link..."
+                    style={{ width: '100%', marginBottom: 8 }}
+                    optionFilterProp="label"
+                    value={undefined}
+                    onChange={(childCardId: string) => linkChildMutation.mutate(childCardId)}
+                    loading={!projectCards}
+                    options={validLinkableCards.map((c) => ({
+                      value: c.id,
+                      label: `${prefix}-${c.card_number}: ${c.title}`,
+                    }))}
+                    notFoundContent="No linkable cards"
+                  />
+                )}
                 {children && children.length > 0 ? (
                   <List
                     size="small"
@@ -416,8 +596,9 @@ const CardDetailDrawer: React.FC<CardDetailDrawerProps> = ({
                     renderItem={(child: Card) => (
                       <List.Item>
                         <Space>
-                          <Tag color={CARD_TYPE_COLORS[child.card_type]} style={{ fontSize: 10 }}>
-                            {child.card_type.toUpperCase()}
+                          <Tag color={getCardTypeColor(child.card_type)} style={{ fontSize: 10 }}>
+                            {React.createElement(getCardTypeIcon(child.card_type), { style: { marginRight: 2, fontSize: 10 } })}
+                            {getCardTypeLabel(child.card_type)}
                           </Tag>
                           <Text>{prefix}-{child.card_number}</Text>
                           <Text>{child.title}</Text>

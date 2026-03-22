@@ -1,3 +1,4 @@
+# backend/app/services/card_service.py
 from uuid import UUID
 
 from sqlalchemy import select, delete
@@ -17,27 +18,15 @@ from app.schemas.card import (
     CardCreateRequest,
     CardDetailResponse,
     CardMoveRequest,
+    CardReorderRequest,
     CardResponse,
     CardUpdateRequest,
+    ParentCardInfo,
 )
 from app.schemas.comment import CommentResponse
 from app.schemas.label import LabelResponse
 from app.services.project_permission_service import check_project_permission
 from app.utils.datetime_utils import now_kst
-
-
-# --- Hierarchy rules: epic -> story -> task ---
-_HIERARCHY = {
-    "epic": None,          # epic can have no parent
-    "story": "epic",       # story must be under epic
-    "task": "story",       # task must be under story (or epic)
-}
-
-_ALLOWED_PARENTS = {
-    "epic": set(),
-    "story": {"epic"},
-    "task": {"epic", "story"},
-}
 
 
 def _card_to_response(card: Card, prefix: str) -> CardResponse:
@@ -62,6 +51,17 @@ def _card_to_detail_response(card: Card, prefix: str) -> CardDetailResponse:
         if c.deleted_at is None
     ]
 
+    # 삭제되지 않은 상위 카드가 존재하는 경우에만 ParentCardInfo 생성
+    parent_info: ParentCardInfo | None = None
+    if card.parent is not None and card.parent.deleted_at is None:
+        p = card.parent
+        parent_info = ParentCardInfo(
+            id=p.id,
+            card_type=p.card_type.value if isinstance(p.card_type, CardType) else p.card_type,
+            card_number=p.card_number,
+            title=p.title,
+        )
+
     resp = CardDetailResponse(
         id=card.id,
         project_id=card.project_id,
@@ -84,6 +84,7 @@ def _card_to_detail_response(card: Card, prefix: str) -> CardDetailResponse:
         labels=labels,
         children=children,
         comments=comments,
+        parent=parent_info,
     )
     return resp
 
@@ -142,14 +143,22 @@ async def create_card(
     app_config = get_app_config()
     card_repo = CardRepository(db)
 
-    # Validate parent hierarchy
+    # Validate parent hierarchy using config
+    allowed_parents = app_config.allowed_parents
+    independent_types = app_config.independent_types
+
     if data.parent_id:
         parent = await _get_card_or_404(db, data.parent_id)
         parent_type = parent.card_type.value if isinstance(parent.card_type, CardType) else parent.card_type
-        allowed = _ALLOWED_PARENTS.get(data.card_type, set())
+        allowed = allowed_parents.get(data.card_type, set())
         if parent_type not in allowed:
             raise BadRequestException(
                 detail=f"A {data.card_type} cannot be a child of a {parent_type}"
+            )
+    else:
+        if data.card_type not in independent_types:
+            raise BadRequestException(
+                detail=f"A {data.card_type} card must have a parent"
             )
 
     # Determine column
@@ -199,11 +208,58 @@ async def update_card(
     data: CardUpdateRequest,
     current_user: User,
 ) -> CardResponse:
-    """Update card fields."""
+    """카드 필드 업데이트."""
     card = await _get_card_or_404(db, card_id)
     await check_project_permission(db, card.project_id, current_user, ["manager", "member"])
 
     update_data = data.model_dump(exclude_unset=True)
+
+    # parent_id 변경 시 계층 구조 검증
+    if "parent_id" in update_data:
+        new_parent_id = update_data["parent_id"]
+        app_config = get_app_config()
+        card_type = card.card_type.value if isinstance(card.card_type, CardType) else card.card_type
+
+        if new_parent_id is not None:
+            # 자기 자신을 부모로 설정할 수 없음
+            if new_parent_id == card_id:
+                raise BadRequestException(detail="A card cannot be its own parent")
+
+            parent = await _get_card_or_404(db, new_parent_id)
+            parent_type = parent.card_type.value if isinstance(parent.card_type, CardType) else parent.card_type
+
+            # 같은 프로젝트에 속해야 함
+            if parent.project_id != card.project_id:
+                raise BadRequestException(detail="Parent card must be in the same project")
+
+            # 허용된 부모 타입 검증
+            allowed = app_config.allowed_parents.get(card_type, set())
+            if parent_type not in allowed:
+                raise BadRequestException(
+                    detail=f"A {card_type} cannot be a child of a {parent_type}"
+                )
+
+            # 순환 참조 방지
+            card_repo = CardRepository(db)
+
+            async def _is_descendant(ancestor_id: UUID, target_id: UUID) -> bool:
+                children = await card_repo.get_children(ancestor_id)
+                for child in children:
+                    if child.id == target_id:
+                        return True
+                    if await _is_descendant(child.id, target_id):
+                        return True
+                return False
+
+            if await _is_descendant(card_id, new_parent_id):
+                raise BadRequestException(detail="Cannot create a circular hierarchy")
+        else:
+            # parent_id를 None으로 설정 시 독립 가능 여부 확인
+            if card_type not in app_config.independent_types:
+                raise BadRequestException(
+                    detail=f"A {card_type} card must have a parent"
+                )
+
     if "priority" in update_data and update_data["priority"] is not None:
         update_data["priority"] = CardPriority(update_data["priority"])
 
@@ -466,3 +522,104 @@ async def remove_label(
         )
     )
     await db.flush()
+
+
+async def reorder_in_hierarchy(
+    db: AsyncSession,
+    card_id: UUID,
+    data: CardReorderRequest,
+    current_user: User,
+) -> CardResponse:
+    """Timeline DnD 등에서 같은 parent 내 siblings 간 순서를 변경하거나 parent를 이동한다."""
+    app_config = get_app_config()
+    card = await _get_card_or_404(db, card_id)
+    await check_project_permission(db, card.project_id, current_user, ["manager", "member"])
+
+    card_repo = CardRepository(db)
+    card_type = card.card_type.value if isinstance(card.card_type, CardType) else card.card_type
+
+    # parent_id가 변경되는 경우 계층 구조 검증
+    if data.parent_id != card.parent_id:
+        if data.parent_id is not None:
+            # 자기 자신을 부모로 설정할 수 없음
+            if data.parent_id == card_id:
+                raise BadRequestException(detail="A card cannot be its own parent")
+
+            parent = await _get_card_or_404(db, data.parent_id)
+            parent_type = parent.card_type.value if isinstance(parent.card_type, CardType) else parent.card_type
+
+            # 같은 프로젝트에 속해야 함
+            if parent.project_id != card.project_id:
+                raise BadRequestException(detail="Parent card must be in the same project")
+
+            # 허용된 부모 타입 검증
+            allowed = app_config.allowed_parents.get(card_type, set())
+            if parent_type not in allowed:
+                raise BadRequestException(
+                    detail=f"A {card_type} cannot be a child of a {parent_type}"
+                )
+
+            # 순환 참조 방지: 이동 대상이 현재 카드의 자손이면 안 됨
+            async def _is_descendant(ancestor_id: UUID, target_id: UUID) -> bool:
+                children = await card_repo.get_children(ancestor_id)
+                for child in children:
+                    if child.id == target_id:
+                        return True
+                    if await _is_descendant(child.id, target_id):
+                        return True
+                return False
+
+            if await _is_descendant(card_id, data.parent_id):
+                raise BadRequestException(detail="Cannot create a circular hierarchy")
+        else:
+            # parent_id를 None으로 설정 시 독립 가능 여부 확인
+            if card_type not in app_config.independent_types:
+                raise BadRequestException(
+                    detail=f"A {card_type} card must have a parent"
+                )
+
+        card.parent_id = data.parent_id
+
+    # 새 parent 기준으로 siblings 조회 (position 오름차순, 자기 자신 제외)
+    siblings = await card_repo.get_siblings(card.project_id, data.parent_id, card_id)
+
+    # after_card_id 기준으로 삽입 위치(position) 계산
+    if data.after_card_id is None:
+        # 첫 번째 위치에 삽입
+        if siblings:
+            first_pos = siblings[0].position
+            new_position = first_pos // 2 if first_pos > 1 else first_pos - app_config.position_gap
+        else:
+            new_position = app_config.position_gap
+    else:
+        after_idx = next((i for i, s in enumerate(siblings) if s.id == data.after_card_id), None)
+        if after_idx is None:
+            # after_card_id가 siblings에 없으면 맨 끝에 배치
+            new_position = (siblings[-1].position if siblings else 0) + app_config.position_gap
+        elif after_idx == len(siblings) - 1:
+            # after_card_id가 마지막 sibling이면 그 뒤에 추가
+            new_position = siblings[after_idx].position + app_config.position_gap
+        else:
+            # 두 sibling 사이에 삽입
+            prev_pos = siblings[after_idx].position
+            next_pos = siblings[after_idx + 1].position
+            new_position = (prev_pos + next_pos) // 2
+
+            # gap이 너무 작으면 siblings 전체를 재정렬 후 재계산
+            if next_pos - prev_pos < 2:
+                for idx, s in enumerate(siblings):
+                    s.position = (idx + 1) * app_config.position_gap
+                await db.flush()
+                prev_pos = siblings[after_idx].position
+                if after_idx + 1 < len(siblings):
+                    next_pos = siblings[after_idx + 1].position
+                    new_position = (prev_pos + next_pos) // 2
+                else:
+                    new_position = prev_pos + app_config.position_gap
+
+    card.position = new_position
+    await db.flush()
+    await db.refresh(card)
+
+    prefix = await _get_project_prefix(db, card.project_id)
+    return _card_to_response(card, prefix)

@@ -28,6 +28,32 @@ board:
 card:
   position_gap: 1000
   auto_archive_days: 7
+  completed_visible_days: 3
+  types:
+    epic:
+      color: "#722ed1"
+      icon: "CrownOutlined"
+      allowed_parents: []
+      can_be_independent: true
+      display_order: 0
+    story:
+      color: "#1890ff"
+      icon: "BookOutlined"
+      allowed_parents: ["epic"]
+      can_be_independent: false
+      display_order: 1
+    task:
+      color: "#52c41a"
+      icon: "CheckSquareOutlined"
+      allowed_parents: ["epic", "story"]
+      can_be_independent: true
+      display_order: 2
+    sub_task:
+      color: "#faad14"
+      icon: "MinusSquareOutlined"
+      allowed_parents: ["task"]
+      can_be_independent: false
+      display_order: 3
 
 scheduler:
   archive_interval_hours: 1
@@ -38,7 +64,7 @@ auth:
 
 hr:
   excel_path: "data/auth_member/hr_info.xlsx"
-  default_password: "planship1234!"
+  default_password: "crewspace1234!"
 
 sidebar:
   recent_projects_count: 5

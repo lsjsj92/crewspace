@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_active_user
+from app.config import get_app_config
 from app.database import get_db
 from app.models.user import User
 from app.repositories.card_repository import CardRepository
@@ -13,6 +14,7 @@ from app.schemas.card import (
     CardCreateRequest,
     CardDetailResponse,
     CardMoveRequest,
+    CardReorderRequest,
     CardResponse,
     CardUpdateRequest,
 )
@@ -20,6 +22,16 @@ from app.schemas.common import MessageResponse
 from app.services import card_service
 
 router = APIRouter()
+
+
+@router.get("/card-types")
+async def get_card_types() -> dict:
+    """Return card type configuration for the frontend."""
+    config = get_app_config()
+    return {
+        "types": config.card_types,
+        "completed_visible_days": config.completed_visible_days,
+    }
 
 
 @router.get("/projects/{project_id}/cards", response_model=list[CardResponse])
@@ -41,6 +53,30 @@ async def list_project_cards(
     from app.services.card_service import _get_project_prefix, _card_to_response
     prefix = await _get_project_prefix(db, project_id)
     return [_card_to_response(c, prefix) for c in cards]
+
+
+@router.get("/projects/{project_id}/cards/check-duplicate")
+async def check_duplicate_title(
+    project_id: UUID,
+    title: str = Query(..., description="Card title to check"),
+    card_type: str = Query(..., description="Card type"),
+    exclude_card_id: UUID | None = Query(None, description="Card ID to exclude"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+) -> dict:
+    """Check if a card with the same title and type exists in the project."""
+    from app.services.project_permission_service import check_project_permission
+    await check_project_permission(db, project_id, current_user, ["manager", "member", "viewer"])
+    repo = CardRepository(db)
+    duplicates = await repo.find_by_title(project_id, title, card_type, exclude_card_id)
+    return {
+        "has_duplicate": len(duplicates) > 0,
+        "count": len(duplicates),
+        "cards": [
+            {"id": str(c.id), "card_number": c.card_number, "title": c.title}
+            for c in duplicates
+        ],
+    }
 
 
 @router.post("/projects/{project_id}/cards", response_model=CardResponse, status_code=201)
@@ -95,6 +131,17 @@ async def move_card(
 ) -> CardResponse:
     """Move a card to a different column and/or position."""
     return await card_service.move_card(db, card_id, data, current_user)
+
+
+@router.post("/cards/{card_id}/reorder", response_model=CardResponse)
+async def reorder_card(
+    card_id: UUID,
+    data: CardReorderRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+) -> CardResponse:
+    """Reorder a card within its hierarchy."""
+    return await card_service.reorder_in_hierarchy(db, card_id, data, current_user)
 
 
 @router.get("/cards/{card_id}/children", response_model=list[CardResponse])

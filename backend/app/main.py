@@ -1,5 +1,5 @@
 # backend/app/main.py
-# Planship 백엔드 애플리케이션 진입점
+# Crewspace 백엔드 애플리케이션 진입점
 import logging
 from contextlib import asynccontextmanager
 from collections.abc import AsyncGenerator
@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.exc import IntegrityError, OperationalError, ProgrammingError
 
-from app.config import get_settings, get_app_config
+from app.config import get_settings
 from app.database import engine, async_session_factory
 from app.api.router import api_router
 from app.exceptions.handlers import register_exception_handlers
@@ -19,20 +19,38 @@ logger = logging.getLogger(__name__)
 
 
 async def _ensure_superadmin() -> None:
-    """최초 기동 시 슈퍼관리자 계정이 없으면 생성한다.
+    """슈퍼관리자 계정을 .env 설정과 동기화한다.
 
+    매 기동 시 .env의 이메일/비밀번호가 DB에 반영되도록 보장한다.
     다중 워커 환경에서 동시 실행되더라도 IntegrityError를 안전하게 처리한다.
     """
     settings = get_settings()
     from app.repositories.user_repository import UserRepository
-    from app.utils.security import hash_password
+    from app.utils.security import hash_password, verify_password
 
     async with async_session_factory() as session:
         repo = UserRepository(session)
-        existing = await repo.get_by_email(settings.SUPERADMIN_EMAIL)
-        if existing:
+
+        # 이메일 또는 username으로 기존 슈퍼관리자 조회
+        admin = await repo.get_by_email(settings.SUPERADMIN_EMAIL)
+        if not admin:
+            admin = await repo.get_by_username(settings.SUPERADMIN_USERNAME)
+
+        if admin and admin.is_superadmin:
+            # .env 설정과 DB를 동기화
+            changed = False
+            if admin.email != settings.SUPERADMIN_EMAIL:
+                admin.email = settings.SUPERADMIN_EMAIL
+                changed = True
+            if not verify_password(settings.SUPERADMIN_PASSWORD, admin.password_hash):
+                admin.password_hash = hash_password(settings.SUPERADMIN_PASSWORD)
+                changed = True
+            if changed:
+                await session.commit()
+                logger.info("슈퍼관리자 설정 동기화 완료: %s", settings.SUPERADMIN_EMAIL)
             return
 
+        # 계정이 없으면 신규 생성
         try:
             user = await repo.create(
                 email=settings.SUPERADMIN_EMAIL,
@@ -51,7 +69,7 @@ async def _ensure_superadmin() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    logger.info("Planship 서버 기동 중...")
+    logger.info("Crewspace 서버 기동 중...")
     try:
         await _ensure_superadmin()
     except (ProgrammingError, OperationalError) as exc:
@@ -64,14 +82,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     yield
     stop_scheduler()
     await engine.dispose()
-    logger.info("Planship 서버 종료 완료.")
+    logger.info("Crewspace 서버 종료 완료.")
 
 
 def create_app() -> FastAPI:
     settings = get_settings()
 
     app = FastAPI(
-        title="Planship API",
+        title="Crewspace API",
         description="Self-hosted project management system",
         version="1.0.0",
         lifespan=lifespan,

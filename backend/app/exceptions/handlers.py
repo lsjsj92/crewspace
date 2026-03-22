@@ -4,7 +4,7 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
-from app.exceptions.base import PlanshipException
+from app.exceptions.base import CrewspaceException
 
 logger = logging.getLogger(__name__)
 
@@ -12,9 +12,9 @@ logger = logging.getLogger(__name__)
 def register_exception_handlers(app: FastAPI) -> None:
     """Register custom exception handlers on the FastAPI application."""
 
-    @app.exception_handler(PlanshipException)
-    async def planship_exception_handler(
-        request: Request, exc: PlanshipException
+    @app.exception_handler(CrewspaceException)
+    async def crewspace_exception_handler(
+        request: Request, exc: CrewspaceException
     ) -> JSONResponse:
         return JSONResponse(
             status_code=exc.status_code,

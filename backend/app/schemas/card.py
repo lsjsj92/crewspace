@@ -1,3 +1,4 @@
+# backend/app/schemas/card.py
 from datetime import date, datetime
 from uuid import UUID
 
@@ -11,7 +12,7 @@ from app.schemas.comment import CommentResponse
 class CardCreateRequest(BaseModel):
     title: str = Field(..., min_length=1, max_length=500)
     description: str | None = None
-    card_type: str = Field(..., pattern="^(epic|story|task)$")
+    card_type: str = Field(..., pattern="^(epic|story|task|sub_task)$")
     parent_id: UUID | None = None
     priority: str = Field(default="medium", pattern="^(lowest|low|medium|high|highest)$")
     start_date: date | None = None
@@ -22,6 +23,7 @@ class CardCreateRequest(BaseModel):
 class CardUpdateRequest(BaseModel):
     title: str | None = Field(None, min_length=1, max_length=500)
     description: str | None = None
+    parent_id: UUID | None = None
     priority: str | None = Field(None, pattern="^(lowest|low|medium|high|highest)$")
     start_date: date | None = None
     due_date: date | None = None
@@ -30,6 +32,16 @@ class CardUpdateRequest(BaseModel):
 class CardMoveRequest(BaseModel):
     column_id: UUID
     position: int
+
+
+class CardAssigneeResponse(BaseModel):
+    id: UUID
+    card_id: UUID
+    user_id: UUID
+    assigned_at: datetime
+    user: UserResponse | None = None
+
+    model_config = {"from_attributes": True}
 
 
 class CardResponse(BaseModel):
@@ -50,6 +62,7 @@ class CardResponse(BaseModel):
     created_by: UUID
     created_at: datetime
     prefix: str = ""
+    assignees: list[CardAssigneeResponse] = []
 
     @computed_field
     @property
@@ -59,24 +72,27 @@ class CardResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class CardAssigneeResponse(BaseModel):
+class ParentCardInfo(BaseModel):
     id: UUID
-    card_id: UUID
-    user_id: UUID
-    assigned_at: datetime
-    user: UserResponse | None = None
-
+    card_type: str
+    card_number: int
+    title: str
     model_config = {"from_attributes": True}
 
 
 class CardDetailResponse(CardResponse):
-    assignees: list[CardAssigneeResponse] = []
     labels: list[LabelResponse] = []
     children: list["CardResponse"] = []
     comments: list[CommentResponse] = []
+    parent: ParentCardInfo | None = None
 
     model_config = {"from_attributes": True}
 
 
 class CardAssigneeRequest(BaseModel):
     user_id: UUID
+
+
+class CardReorderRequest(BaseModel):
+    parent_id: UUID | None = None
+    after_card_id: UUID | None = None  # 이 카드 뒤에 배치 (None이면 첫 번째 위치)

@@ -111,30 +111,47 @@ const AppLayout: React.FC = () => {
           bottom: 0,
         }}
       >
-        <div
-          style={{
-            height: 48,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            margin: '8px 0',
-          }}
-        >
-          <Text
-            strong
-            style={{ color: '#fff', fontSize: collapsed ? 16 : 20, letterSpacing: 1 }}
+        <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+          <div
+            style={{
+              height: 48,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '8px 0',
+            }}
           >
-            {collapsed ? 'PS' : 'Planship'}
-          </Text>
+            <Text
+              strong
+              style={{ color: '#fff', fontSize: collapsed ? 16 : 20, letterSpacing: 1 }}
+            >
+              {collapsed ? 'CS' : 'Crewspace'}
+            </Text>
+          </div>
+          <Menu
+            theme="dark"
+            mode="inline"
+            selectedKeys={[location.pathname]}
+            defaultOpenKeys={['recent-projects']}
+            items={menuItems}
+            onClick={handleMenuClick}
+            style={{ flex: 1 }}
+          />
+          <div
+            onClick={() => setCollapsed(!collapsed)}
+            style={{
+              height: 48,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              borderTop: '1px solid rgba(255, 255, 255, 0.1)',
+              color: 'rgba(255, 255, 255, 0.65)',
+            }}
+          >
+            {collapsed ? <MenuUnfoldOutlined style={{ fontSize: 16 }} /> : <MenuFoldOutlined style={{ fontSize: 16 }} />}
+          </div>
         </div>
-        <Menu
-          theme="dark"
-          mode="inline"
-          selectedKeys={[location.pathname]}
-          defaultOpenKeys={['recent-projects']}
-          items={menuItems}
-          onClick={handleMenuClick}
-        />
       </Sider>
       <Layout style={{ marginLeft: collapsed ? 80 : 240, transition: 'margin-left 0.2s' }}>
         <Header
@@ -147,12 +164,7 @@ const AppLayout: React.FC = () => {
             borderBottom: '1px solid #f0f0f0',
           }}
         >
-          <Space>
-            <div style={{ cursor: 'pointer', fontSize: 18 }} onClick={() => setCollapsed(!collapsed)}>
-              {collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-            </div>
-            <SearchBar />
-          </Space>
+          <SearchBar />
           <Dropdown
             menu={{ items: userMenuItems, onClick: handleUserMenuClick }}
             placement="bottomRight"

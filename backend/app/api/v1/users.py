@@ -9,6 +9,7 @@ from app.models.user import User
 from app.schemas.auth import UserResponse
 from app.schemas.common import MessageResponse
 from app.schemas.user import (
+    AdminUserUpdateRequest,
     HRImportResponse,
     UserCreateRequest,
     UserListResponse,
@@ -71,6 +72,17 @@ async def update_user(
 ) -> UserResponse:
     """Update a user's profile."""
     return await user_service.update_user(db, user_id, data)
+
+
+@router.put("/{user_id}/admin", response_model=UserResponse)
+async def admin_update_user(
+    user_id: UUID,
+    data: AdminUserUpdateRequest,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_superadmin),
+) -> UserResponse:
+    """Update user info by admin. Superadmin only."""
+    return await user_service.admin_update_user(db, user_id, data)
 
 
 @router.patch("/{user_id}/password", response_model=MessageResponse)

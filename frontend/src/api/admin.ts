@@ -27,6 +27,23 @@ export async function updateUser(
   return response.data;
 }
 
+export async function adminUpdateUser(
+  userId: string,
+  data: {
+    email?: string;
+    username?: string;
+    display_name?: string;
+    is_active?: boolean;
+    is_superadmin?: boolean;
+    employee_id?: string | null;
+    organization?: string | null;
+    gw_id?: string | null;
+  }
+): Promise<User> {
+  const response = await apiClient.put<User>(`/users/${userId}/admin`, data);
+  return response.data;
+}
+
 export async function deactivateUser(userId: string): Promise<void> {
   await apiClient.delete(`/users/${userId}`);
 }
