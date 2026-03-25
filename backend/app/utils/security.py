@@ -1,25 +1,25 @@
+# backend/app/utils/security.py
+# 비밀번호 해싱, JWT 토큰 생성/검증 유틸리티
 from datetime import datetime, timedelta, timezone
 
-from jose import JWTError, jwt
-from passlib.context import CryptContext
+import bcrypt
+from jose import jwt
 
 from app.config import get_settings
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
 
 def hash_password(password: str) -> str:
-    """Hash a plaintext password using bcrypt."""
-    return pwd_context.hash(password)
+    """평문 비밀번호를 bcrypt로 해싱한다."""
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    """Verify a plaintext password against a bcrypt hash."""
-    return pwd_context.verify(plain, hashed)
+    """평문 비밀번호와 bcrypt 해시를 비교 검증한다."""
+    return bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
 
 
 def create_access_token(data: dict) -> str:
-    """Create a JWT access token that expires in ACCESS_TOKEN_EXPIRE_MINUTES."""
+    """만료 시간이 포함된 JWT 액세스 토큰을 생성한다."""
     settings = get_settings()
     to_encode = data.copy()
     expire = datetime.now(tz=timezone.utc) + timedelta(
@@ -30,7 +30,7 @@ def create_access_token(data: dict) -> str:
 
 
 def create_refresh_token(data: dict) -> str:
-    """Create a JWT refresh token that expires in REFRESH_TOKEN_EXPIRE_DAYS."""
+    """만료 시간이 포함된 JWT 리프레시 토큰을 생성한다."""
     settings = get_settings()
     to_encode = data.copy()
     expire = datetime.now(tz=timezone.utc) + timedelta(
@@ -41,6 +41,6 @@ def create_refresh_token(data: dict) -> str:
 
 
 def decode_token(token: str) -> dict:
-    """Decode and verify a JWT token. Raises JWTError on failure."""
+    """JWT 토큰을 디코딩하고 검증한다. 실패 시 JWTError 발생."""
     settings = get_settings()
     return jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])

@@ -1,0 +1,13 @@
+# 기본값: 자동 줄바꿈 처리
+* text=auto
+
+# 셸 스크립트: Docker Linux 컨테이너에서 실행되므로 항상 LF 유지
+*.sh text eol=lf
+
+# Dockerfile: Linux 환경 대상이므로 LF 유지
+Dockerfile text eol=lf
+
+# 설정 파일: 플랫폼 간 일관성 유지
+*.yml text eol=lf
+*.yaml text eol=lf
+*.conf text eol=lf
