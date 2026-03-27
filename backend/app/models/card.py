@@ -7,11 +7,13 @@ from sqlalchemy import (
     DateTime,
     Enum,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -37,7 +39,13 @@ class CardPriority(enum.Enum):
 class Card(Base, TimestampMixin, SoftDeleteMixin):
     __tablename__ = "cards"
     __table_args__ = (
-        UniqueConstraint("project_id", "card_number", name="uq_cards_project_card_number"),
+        Index(
+            "uq_cards_project_card_number_active",
+            "project_id",
+            "card_number",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(

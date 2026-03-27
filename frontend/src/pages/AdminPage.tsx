@@ -5,19 +5,28 @@ import {
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { PlusOutlined, UploadOutlined, DeleteOutlined, LockOutlined, EditOutlined } from '@ant-design/icons';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   getUsers, updateUser, deactivateUser, createUser, importHR,
   deleteTeam, resetUserPassword, adminUpdateUser,
 } from '@/api/admin';
 import { getMyTeams } from '@/api/teams';
-import { getProjects, createProject } from '@/api/projects';
+import { getProjects, createProject, deleteProject } from '@/api/projects';
 import type { User, Team, Project } from '@/types';
 
 const { Title, Text } = Typography;
 
 const AdminPage: React.FC = () => {
   const { user: currentUser } = useAuth();
+  const queryClient = useQueryClient();
+
+  const invalidateRelatedQueries = () => {
+    queryClient.invalidateQueries({ queryKey: ['teams'] });
+    queryClient.invalidateQueries({ queryKey: ['board'] });
+    queryClient.invalidateQueries({ queryKey: ['project-members'] });
+  };
+
   const [users, setUsers] = useState<User[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -30,6 +39,9 @@ const AdminPage: React.FC = () => {
   const [resetPasswordUserId, setResetPasswordUserId] = useState<string | null>(null);
   const [editUserOpen, setEditUserOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [deleteProjectOpen, setDeleteProjectOpen] = useState(false);
+  const [deletingProject, setDeletingProject] = useState<Project | null>(null);
+  const [deleteProjectConfirm, setDeleteProjectConfirm] = useState('');
   const [userForm] = Form.useForm();
   const [editUserForm] = Form.useForm();
   const [projectForm] = Form.useForm();
@@ -98,6 +110,7 @@ const AdminPage: React.FC = () => {
         message.success(`${record.display_name} has been activated`);
       }
       fetchUsers();
+      invalidateRelatedQueries();
     } catch {
       message.error('Failed to update user status');
     }
@@ -111,6 +124,7 @@ const AdminPage: React.FC = () => {
       );
       fetchUsers();
       fetchTeams();
+      invalidateRelatedQueries();
     } catch {
       message.error('Failed to import HR data');
     }
@@ -126,6 +140,7 @@ const AdminPage: React.FC = () => {
       setCreateUserOpen(false);
       userForm.resetFields();
       fetchUsers();
+      invalidateRelatedQueries();
     } catch {
       message.error('Failed to create user');
     }
@@ -136,8 +151,30 @@ const AdminPage: React.FC = () => {
       await deleteTeam(teamId);
       message.success('Team deleted');
       fetchTeams();
+      invalidateRelatedQueries();
     } catch {
       message.error('Failed to delete team');
+    }
+  };
+
+  const openDeleteProjectModal = (project: Project) => {
+    setDeletingProject(project);
+    setDeleteProjectConfirm('');
+    setDeleteProjectOpen(true);
+  };
+
+  const handleDeleteProject = async () => {
+    if (!deletingProject || deleteProjectConfirm !== deletingProject.name) return;
+    try {
+      await deleteProject(deletingProject.id);
+      message.success('Project deleted');
+      setDeleteProjectOpen(false);
+      setDeletingProject(null);
+      setDeleteProjectConfirm('');
+      fetchProjects();
+      invalidateRelatedQueries();
+    } catch {
+      message.error('Failed to delete project');
     }
   };
 
@@ -155,8 +192,10 @@ const AdminPage: React.FC = () => {
       setCreateProjectOpen(false);
       projectForm.resetFields();
       fetchProjects();
-    } catch {
-      message.error('Failed to create project');
+      invalidateRelatedQueries();
+    } catch (error: any) {
+      const detail = error?.response?.data?.detail || 'Failed to create project';
+      message.error(detail);
     }
   };
 
@@ -168,6 +207,7 @@ const AdminPage: React.FC = () => {
       setResetPasswordOpen(false);
       setResetPasswordUserId(null);
       passwordForm.resetFields();
+      invalidateRelatedQueries();
     } catch {
       message.error('Failed to reset password');
     }
@@ -207,6 +247,7 @@ const AdminPage: React.FC = () => {
       setEditingUser(null);
       editUserForm.resetFields();
       fetchUsers();
+      invalidateRelatedQueries();
     } catch {
       message.error('Failed to update user');
     }
@@ -377,6 +418,21 @@ const AdminPage: React.FC = () => {
       key: 'created_at',
       render: (date: string) => new Date(date).toLocaleDateString(),
     },
+    {
+      title: 'Actions',
+      key: 'actions',
+      render: (_, record) => (
+        <Button
+          type="text"
+          danger
+          size="small"
+          icon={<DeleteOutlined />}
+          onClick={() => openDeleteProjectModal(record)}
+        >
+          Delete
+        </Button>
+      ),
+    },
   ];
 
   const tabItems = [
@@ -546,6 +602,33 @@ const AdminPage: React.FC = () => {
             <Input />
           </Form.Item>
         </Form>
+      </Modal>
+
+      {/* Delete Project Modal */}
+      <Modal
+        title="Delete Project"
+        open={deleteProjectOpen}
+        onCancel={() => {
+          setDeleteProjectOpen(false);
+          setDeletingProject(null);
+          setDeleteProjectConfirm('');
+        }}
+        onOk={handleDeleteProject}
+        okButtonProps={{
+          danger: true,
+          disabled: deleteProjectConfirm !== deletingProject?.name,
+        }}
+        okText="Delete"
+      >
+        <p>
+          This action cannot be undone. To confirm, type the project name:{' '}
+          <Text strong>{deletingProject?.name}</Text>
+        </p>
+        <Input
+          placeholder="Type project name to confirm"
+          value={deleteProjectConfirm}
+          onChange={(e) => setDeleteProjectConfirm(e.target.value)}
+        />
       </Modal>
 
       {/* Reset Password Modal */}

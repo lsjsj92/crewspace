@@ -18,17 +18,23 @@ class BaseRepository(Generic[T]):
         self.session = session
 
     async def get_by_id(self, id: UUID) -> T | None:
-        """Fetch a single record by its primary key UUID."""
-        result = await self.session.execute(
-            select(self.model).where(self.model.id == id)
-        )
+        """Fetch a single record by its primary key UUID.
+        SoftDeleteMixin을 사용하는 모델은 deleted_at IS NULL 조건을 자동 적용한다.
+        """
+        stmt = select(self.model).where(self.model.id == id)
+        if hasattr(self.model, "deleted_at"):
+            stmt = stmt.where(self.model.deleted_at.is_(None))
+        result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
     async def get_all(self, skip: int = 0, limit: int = 100) -> list[T]:
-        """Fetch multiple records with pagination."""
-        result = await self.session.execute(
-            select(self.model).offset(skip).limit(limit)
-        )
+        """Fetch multiple records with pagination.
+        SoftDeleteMixin을 사용하는 모델은 soft-deleted 행을 자동 제외한다.
+        """
+        stmt = select(self.model).offset(skip).limit(limit)
+        if hasattr(self.model, "deleted_at"):
+            stmt = stmt.where(self.model.deleted_at.is_(None))
+        result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
     async def create(self, **kwargs) -> T:

@@ -1,7 +1,8 @@
 # backend/app/services/project_service.py
-# 프로젝트 관련 비즈니스 로직 (프로젝트 CRUD, 보드 칼럼 생성)
+# 프로젝트 관련 비즈니스 로직 (프로젝트 CRUD, 보드 칼럼 생성, 삭제 시 관련 데이터 정리)
 from uuid import UUID
 
+from sqlalchemy import delete as sa_delete, update as sa_update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.exceptions.base import (
@@ -10,7 +11,11 @@ from app.exceptions.base import (
     ForbiddenException,
     NotFoundException,
 )
-from app.models.project import Project, ProjectRole, ProjectStatus
+from app.models.board_column import BoardColumn
+from app.models.card import Card
+from app.models.label import Label
+from app.models.project import Project, ProjectMember, ProjectRole, ProjectStatus
+from app.models.project_outcome import ProjectOutcome
 from app.models.user import User
 from app.repositories.board_column_repository import BoardColumnRepository
 from app.repositories.project_member_repository import ProjectMemberRepository
@@ -23,6 +28,7 @@ from app.schemas.project import (
     ProjectUpdateRequest,
 )
 from app.services.project_permission_service import check_project_permission
+from app.utils.datetime_utils import now_kst
 
 
 def _project_response(project: Project) -> ProjectResponse:
@@ -49,13 +55,13 @@ async def create_project(
     if not current_user.is_superadmin:
         raise ForbiddenException(detail="Only superadmin can create projects")
 
-    # Check prefix uniqueness (global)
+    # prefix 중복 검사 (활성 프로젝트만 — partial unique index가 soft-deleted 행을 제외)
     project_repo = ProjectRepository(db)
     existing = await project_repo.get_by_prefix(data.prefix)
     if existing:
         raise ConflictException(detail=f"Project prefix '{data.prefix}' already exists")
 
-    # Create project (no team_id)
+    # 프로젝트 생성
     project = await project_repo.create(
         name=data.name,
         description=data.description,
@@ -166,7 +172,14 @@ async def delete_project(
     project_id: UUID,
     current_user: User,
 ) -> None:
-    """프로젝트를 소프트 삭제한다. superadmin only."""
+    """프로젝트를 소프트 삭제하고 관련 데이터를 정리한다.
+
+    partial unique index(WHERE deleted_at IS NULL)에 의해
+    soft-delete된 프로젝트의 prefix는 unique 검사에서 자동 제외된다.
+    관련 board_columns, cards, labels는 소프트 삭제하고,
+    project_members, project_outcomes는 하드 삭제한다.
+    superadmin only.
+    """
     if not current_user.is_superadmin:
         raise ForbiddenException(detail="Only superadmin can delete projects")
 
@@ -175,9 +188,50 @@ async def delete_project(
     if not project or project.deleted_at is not None:
         raise NotFoundException(detail="Project not found")
 
-    deleted = await project_repo.soft_delete(project_id)
-    if not deleted:
-        raise NotFoundException(detail="Project not found")
+    now = now_kst()
+
+    # partial unique index(WHERE deleted_at IS NULL)에 의해
+    # soft-delete된 프로젝트의 prefix는 unique 검사에서 자동 제외되므로
+    # prefix 변경 없이 삭제 가능
+
+    # 관련 보드 칼럼 소프트 삭제
+    await db.execute(
+        sa_update(BoardColumn)
+        .where(BoardColumn.project_id == project_id, BoardColumn.deleted_at.is_(None))
+        .values(deleted_at=now)
+    )
+
+    # 관련 카드 소프트 삭제
+    await db.execute(
+        sa_update(Card)
+        .where(Card.project_id == project_id, Card.deleted_at.is_(None))
+        .values(deleted_at=now)
+    )
+
+    # 관련 레이블 소프트 삭제
+    await db.execute(
+        sa_update(Label)
+        .where(Label.project_id == project_id, Label.deleted_at.is_(None))
+        .values(deleted_at=now)
+    )
+
+    # 프로젝트 멤버 삭제 (SoftDeleteMixin 없음)
+    await db.execute(
+        sa_delete(ProjectMember).where(ProjectMember.project_id == project_id)
+    )
+
+    # 프로젝트 성과 삭제 (SoftDeleteMixin 없음)
+    await db.execute(
+        sa_delete(ProjectOutcome).where(ProjectOutcome.project_id == project_id)
+    )
+
+    # 프로젝트 소프트 삭제 (prefix 유지 — partial unique index가 자동 제외)
+    await db.execute(
+        sa_update(Project)
+        .where(Project.id == project_id)
+        .values(deleted_at=now)
+    )
+    await db.flush()
 
 
 async def complete_project(

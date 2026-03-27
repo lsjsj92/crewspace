@@ -12,15 +12,15 @@ class UserRepository(BaseRepository[User]):
         super().__init__(User, session)
 
     async def get_by_email(self, email: str) -> User | None:
-        """Fetch a user by email address."""
+        """Fetch an active user by email address (soft-deleted 사용자 제외)."""
         result = await self.session.execute(
-            select(User).where(User.email == email)
+            select(User).where(User.email == email, User.deleted_at.is_(None))
         )
         return result.scalar_one_or_none()
 
     async def get_by_username(self, username: str) -> User | None:
-        """Fetch a user by username."""
+        """Fetch an active user by username (soft-deleted 사용자 제외)."""
         result = await self.session.execute(
-            select(User).where(User.username == username)
+            select(User).where(User.username == username, User.deleted_at.is_(None))
         )
         return result.scalar_one_or_none()

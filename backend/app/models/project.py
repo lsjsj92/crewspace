@@ -2,7 +2,7 @@ import enum
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import Date, DateTime, Enum, ForeignKey, String, Text, UniqueConstraint, func
+from sqlalchemy import Date, DateTime, Enum, ForeignKey, Index, String, Text, UniqueConstraint, func, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -25,7 +25,10 @@ class ProjectRole(enum.Enum):
 class Project(Base, TimestampMixin, SoftDeleteMixin):
     __tablename__ = "projects"
     __table_args__ = (
-        UniqueConstraint("prefix", name="uq_projects_prefix"),
+        Index(
+            "uq_projects_prefix_active", "prefix",
+            unique=True, postgresql_where=text("deleted_at IS NULL"),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(

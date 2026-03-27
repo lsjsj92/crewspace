@@ -18,6 +18,7 @@ from app.schemas.board import (
 )
 from app.schemas.card import CardAssigneeResponse, CardResponse
 from app.services.project_permission_service import check_project_permission
+from app.utils.datetime_utils import now_kst
 
 
 def _card_to_response(card: Card, prefix: str) -> CardResponse:
@@ -122,18 +123,22 @@ async def create_column(
     end_column = next((c for c in columns if c.is_end), None)
 
     if end_column:
-        # New column goes right before end column
+        # 새 컬럼을 end 컬럼 직전에 삽입
         new_position = end_column.position
-        # Shift end column forward
-        await db.execute(
-            update(BoardColumn)
-            .where(
-                BoardColumn.project_id == project_id,
-                BoardColumn.position >= new_position,
-                BoardColumn.deleted_at.is_(None),
-            )
-            .values(position=BoardColumn.position + 1)
+        # 삽입 지점 이후 활성 컬럼을 높은 position부터 +1 이동
+        # (partial unique index는 활성 행만 검사하므로 soft-deleted 행과 충돌 없음)
+        columns_to_shift = sorted(
+            [c for c in columns if c.position >= new_position],
+            key=lambda c: c.position,
+            reverse=True,
         )
+        for c in columns_to_shift:
+            await db.execute(
+                update(BoardColumn)
+                .where(BoardColumn.id == c.id)
+                .values(position=c.position + 1)
+            )
+        await db.flush()
     else:
         # No end column — append at end
         new_position = (columns[-1].position + 1) if columns else 0
@@ -218,16 +223,18 @@ async def delete_column(
         .values(column_id=target_column.id)
     )
 
-    # Soft-delete the column
-    from app.utils.datetime_utils import now_kst
+    # 소프트 삭제 처리 — partial unique index(WHERE deleted_at IS NULL)에 의해
+    # deleted_at이 설정되면 해당 행은 unique 검사에서 자동 제외된다.
     column.deleted_at = now_kst()
     await db.flush()
 
-    # Rebalance positions for remaining columns
+    # 남은 활성 컬럼을 순차적으로 재정렬 (0, 1, 2, ...)
     remaining = [c for c in sorted_cols if c.id != column_id]
     for idx, col in enumerate(remaining):
         if col.position != idx:
-            col.position = idx
+            await db.execute(
+                update(BoardColumn).where(BoardColumn.id == col.id).values(position=idx)
+            )
     await db.flush()
 
 
@@ -259,14 +266,23 @@ async def reorder_columns(
             if col and col.is_end:
                 raise BadRequestException(detail="End column must be last")
 
-    # Update positions
+    # position 업데이트 (2-pass 방식: 활성 행 간 position 스왑 시 중간 충돌 방지)
+    # partial unique index는 soft-deleted 행을 제외하지만, 활성 행끼리의 스왑에는 여전히 필요
+    # 1단계: 모든 컬럼을 임시 범위로 이동
     for idx, col_id in enumerate(data.column_ids):
-        col = column_map[col_id]
-        if col.position != idx:
-            col.position = idx
+        await db.execute(
+            update(BoardColumn).where(BoardColumn.id == col_id).values(position=20000 + idx)
+        )
     await db.flush()
 
-    # Return updated columns in new order
+    # 2단계: 최종 position 할당
+    for idx, col_id in enumerate(data.column_ids):
+        await db.execute(
+            update(BoardColumn).where(BoardColumn.id == col_id).values(position=idx)
+        )
+    await db.flush()
+
+    # ORM 캐시와 DB 동기화 후 응답 반환
     result: list[ColumnResponse] = []
     for col_id in data.column_ids:
         col = column_map[col_id]

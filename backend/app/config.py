@@ -41,6 +41,9 @@ class Settings(BaseSettings):
     # CORS
     CORS_ORIGINS: str = "http://localhost:3000,http://localhost:5173"
 
+    # 이메일 도메인
+    EMAIL_DOMAIN: str = "example.com"
+
     # Superadmin
     SUPERADMIN_EMAIL: str = "admin@crewspace.local"
     SUPERADMIN_USERNAME: str = "admin"

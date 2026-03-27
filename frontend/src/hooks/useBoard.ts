@@ -13,6 +13,7 @@ export function useBoard(projectId: string | undefined) {
     queryKey: ['board', projectId],
     queryFn: () => getBoard(projectId!),
     enabled: !!projectId,
+    refetchOnWindowFocus: true,
   });
 }
 

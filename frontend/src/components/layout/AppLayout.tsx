@@ -88,7 +88,9 @@ const AppLayout: React.FC = () => {
   ];
 
   const handleUserMenuClick: MenuProps['onClick'] = async ({ key }) => {
-    if (key === 'logout') {
+    if (key === 'profile') {
+      navigate('/profile');
+    } else if (key === 'logout') {
       await logout();
       navigate('/login');
     }

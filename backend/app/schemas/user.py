@@ -8,6 +8,18 @@ class UserUpdateRequest(BaseModel):
     is_active: bool | None = None
 
 
+class SelfProfileUpdateRequest(BaseModel):
+    """사용자 본인 프로필 수정 요청"""
+    display_name: str | None = Field(None, min_length=1, max_length=200)
+    organization: str | None = None
+
+
+class SelfPasswordChangeRequest(BaseModel):
+    """사용자 본인 비밀번호 변경 요청"""
+    current_password: str = Field(..., min_length=1)
+    new_password: str = Field(..., min_length=4)
+
+
 class AdminUserUpdateRequest(BaseModel):
     email: EmailStr | None = None
     username: str | None = Field(None, min_length=1, max_length=100)

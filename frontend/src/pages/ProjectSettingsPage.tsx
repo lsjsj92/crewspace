@@ -8,7 +8,7 @@ import type { ColumnsType } from 'antd/es/table';
 import {
   AppstoreOutlined, FieldTimeOutlined, SettingOutlined,
   PlusOutlined, DeleteOutlined, UserAddOutlined,
-  UpOutlined, DownOutlined,
+  UpOutlined, DownOutlined, EditOutlined,
 } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import dayjs from 'dayjs';
@@ -104,6 +104,10 @@ const ProjectSettingsPage: React.FC = () => {
       setColumnName('');
       message.success('Column added');
     },
+    onError: (error: any) => {
+      const detail = error?.response?.data?.detail || 'Failed to add column';
+      message.error(detail);
+    },
   });
 
   const updateColumnMutation = useMutation({
@@ -114,6 +118,11 @@ const ProjectSettingsPage: React.FC = () => {
       setEditingColumnId(null);
       message.success('Column updated');
     },
+    onError: (error: any) => {
+      const detail = error?.response?.data?.detail || 'Failed to update column';
+      message.error(detail);
+      setEditingColumnId(null);
+    },
   });
 
   const deleteColumnMutation = useMutation({
@@ -121,6 +130,10 @@ const ProjectSettingsPage: React.FC = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['board', id] });
       message.success('Column deleted');
+    },
+    onError: (error: any) => {
+      const detail = error?.response?.data?.detail || 'Failed to delete column';
+      message.error(detail);
     },
   });
 
@@ -415,6 +428,9 @@ const ProjectSettingsPage: React.FC = () => {
                     }}
                   >
                     {name}
+                    {isManager && (
+                      <EditOutlined style={{ marginLeft: 4, fontSize: 12, color: '#999' }} />
+                    )}
                   </span>
                 );
               },
@@ -453,7 +469,7 @@ const ProjectSettingsPage: React.FC = () => {
                 );
               },
             },
-            {
+            ...(isManager ? [{
               title: 'Actions',
               render: (_: unknown, record: BoardColumn) =>
                 !record.is_end ? (
@@ -461,20 +477,22 @@ const ProjectSettingsPage: React.FC = () => {
                     <Button type="text" danger size="small" icon={<DeleteOutlined />} />
                   </Popconfirm>
                 ) : null,
-            },
+            }] : []),
           ]}
         />
-        <Space style={{ marginTop: 8 }}>
-          <Input
-            placeholder="New column name"
-            value={columnName}
-            onChange={(e) => setColumnName(e.target.value)}
-            style={{ width: 200 }}
-          />
-          <Button icon={<PlusOutlined />} onClick={() => columnName && addColumnMutation.mutate(columnName)}>
-            Add Column
-          </Button>
-        </Space>
+        {isManager && (
+          <Space style={{ marginTop: 8 }}>
+            <Input
+              placeholder="New column name"
+              value={columnName}
+              onChange={(e) => setColumnName(e.target.value)}
+              style={{ width: 200 }}
+            />
+            <Button icon={<PlusOutlined />} onClick={() => columnName && addColumnMutation.mutate(columnName)}>
+              Add Column
+            </Button>
+          </Space>
+        )}
       </Card>
 
       {/* Labels */}

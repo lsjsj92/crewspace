@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import Boolean, ForeignKey, SmallInteger, String, UniqueConstraint, func
+from sqlalchemy import Boolean, ForeignKey, Index, SmallInteger, String, func, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -10,7 +10,13 @@ from .base import Base, TimestampMixin, SoftDeleteMixin
 class BoardColumn(Base, TimestampMixin, SoftDeleteMixin):
     __tablename__ = "board_columns"
     __table_args__ = (
-        UniqueConstraint("project_id", "position", name="uq_board_columns_project_position"),
+        Index(
+            "uq_board_columns_project_position_active",
+            "project_id",
+            "position",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(

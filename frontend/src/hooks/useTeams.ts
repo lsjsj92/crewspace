@@ -7,6 +7,7 @@ export function useMyTeams() {
   return useQuery<Team[]>({
     queryKey: ['teams'],
     queryFn: getMyTeams,
+    refetchOnWindowFocus: true,
   });
 }
 
@@ -15,6 +16,7 @@ export function useTeam(teamId: string | undefined) {
     queryKey: ['teams', teamId],
     queryFn: () => getTeam(teamId!),
     enabled: !!teamId,
+    refetchOnWindowFocus: true,
   });
 }
 

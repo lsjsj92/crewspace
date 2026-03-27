@@ -9,6 +9,7 @@ import ProjectBoardPage from '@/pages/ProjectBoardPage';
 import ProjectTimelinePage from '@/pages/ProjectTimelinePage';
 import ProjectSettingsPage from '@/pages/ProjectSettingsPage';
 import AdminPage from '@/pages/AdminPage';
+import ProfilePage from '@/pages/ProfilePage';
 
 const App: React.FC = () => {
   return (
@@ -18,6 +19,7 @@ const App: React.FC = () => {
         <Route element={<AppLayout />}>
           <Route index element={<Navigate to="/dashboard" replace />} />
           <Route path="dashboard" element={<DashboardPage />} />
+          <Route path="profile" element={<ProfilePage />} />
           <Route path="teams/:teamId" element={<TeamPage />} />
           <Route path="projects/:id/board" element={<ProjectBoardPage />} />
           <Route path="projects/:id/timeline" element={<ProjectTimelinePage />} />

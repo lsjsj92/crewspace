@@ -3,7 +3,7 @@ from pathlib import Path
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import get_app_config
+from app.config import get_app_config, get_settings
 from app.models.team import Team, TeamMember, TeamRole
 from app.models.user import User
 from app.repositories.team_repository import TeamRepository
@@ -50,6 +50,7 @@ async def import_from_excel(
     import openpyxl
 
     app_config = get_app_config()
+    settings = get_settings()
 
     if file_path is None:
         file_path = app_config.hr_excel_path
@@ -100,14 +101,21 @@ async def import_from_excel(
         name = str(name).strip()
         organization = str(organization).strip() if organization else None
 
-        # Check existing user by gw_id or employee_id
+        # 기존 사용자 검색 (gw_id → employee_id → email 순서로 확인)
         existing_user = await user_repo.get_by_username(gw_id)
 
         if not existing_user and employee_id:
             result = await db.execute(
-                select(User).where(User.employee_id == employee_id)
+                select(User).where(
+                    User.employee_id == employee_id,
+                    User.deleted_at.is_(None),
+                )
             )
             existing_user = result.scalar_one_or_none()
+
+        if not existing_user:
+            email = f"{gw_id}@{settings.EMAIL_DOMAIN}"
+            existing_user = await user_repo.get_by_email(email)
 
         if existing_user:
             existing_user.display_name = name
@@ -120,7 +128,7 @@ async def import_from_excel(
             user_for_team = existing_user
             updated_count += 1
         else:
-            email = f"{gw_id}@crewspace.local"
+            # email은 위의 중복 체크 단계(line 117)에서 이미 생성됨
             default_password = app_config.hr_default_password
             password_hash_val = hash_password(default_password)
 

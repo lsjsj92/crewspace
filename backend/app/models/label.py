@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import ForeignKey, String, UniqueConstraint, func
+from sqlalchemy import ForeignKey, Index, String, func, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -10,7 +10,13 @@ from .base import Base, TimestampMixin, SoftDeleteMixin
 class Label(Base, TimestampMixin, SoftDeleteMixin):
     __tablename__ = "labels"
     __table_args__ = (
-        UniqueConstraint("project_id", "name", name="uq_labels_project_name"),
+        Index(
+            "uq_labels_project_name_active",
+            "project_id",
+            "name",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(

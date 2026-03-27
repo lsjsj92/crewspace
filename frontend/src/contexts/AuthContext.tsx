@@ -10,6 +10,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -39,6 +40,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     fetchUser();
   }, [fetchUser]);
 
+  const refreshUser = useCallback(async () => {
+    try {
+      const userData = await getMe();
+      setUser(userData);
+    } catch {
+      // 갱신 실패 시 무시
+    }
+  }, []);
+
   const login = async (email: string, password: string) => {
     const tokenResponse = await apiLogin({ email, password });
     setTokens(tokenResponse.access_token, tokenResponse.refresh_token);
@@ -65,6 +75,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     isAuthenticated: !!user,
     login,
     logout,
+    refreshUser,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
