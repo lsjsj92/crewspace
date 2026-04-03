@@ -42,6 +42,8 @@ services:
       dockerfile: Dockerfile
     container_name: crewspace-frontend
     restart: unless-stopped
+    environment:
+      TZ: Asia/Seoul
     ports:
       - "${HOST_FRONTEND_PORT:-3000}:80"
     depends_on:
