@@ -27,6 +27,7 @@ class CardUpdateRequest(BaseModel):
     priority: str | None = Field(None, pattern="^(lowest|low|medium|high|highest)$")
     start_date: date | None = None
     due_date: date | None = None
+    cancelled_at: datetime | None = None
 
 
 class CardMoveRequest(BaseModel):
@@ -58,6 +59,7 @@ class CardResponse(BaseModel):
     start_date: date | None
     due_date: date | None
     completed_at: datetime | None
+    cancelled_at: datetime | None = None
     archived_at: datetime | None
     created_by: UUID
     created_at: datetime

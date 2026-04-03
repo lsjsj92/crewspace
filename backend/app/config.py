@@ -148,7 +148,7 @@ class AppConfig:
 
     @property
     def hr_default_password(self) -> str:
-        return self.hr.get("default_password", "crewspace1234!")
+        return self.hr.get("default_password", "1234!")
 
     @property
     def sidebar(self) -> dict[str, Any]:

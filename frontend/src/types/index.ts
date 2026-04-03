@@ -89,6 +89,7 @@ export interface Card {
   start_date: string | null;
   due_date: string | null;
   completed_at: string | null;
+  cancelled_at: string | null;
   archived_at: string | null;
   created_by: string;
   created_at: string;

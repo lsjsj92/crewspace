@@ -10,6 +10,7 @@ import {
 } from 'antd';
 import {
   DashboardOutlined,
+  CalendarOutlined,
   ProjectOutlined,
   SettingOutlined,
   UserOutlined,
@@ -44,6 +45,11 @@ const AppLayout: React.FC = () => {
         key: '/dashboard',
         icon: <DashboardOutlined />,
         label: 'Dashboard',
+      },
+      {
+        key: '/weekly',
+        icon: <CalendarOutlined />,
+        label: '주간 뷰',
       },
     ];
 

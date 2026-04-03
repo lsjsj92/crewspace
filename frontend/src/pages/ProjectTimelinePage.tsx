@@ -36,7 +36,9 @@ const { Title } = Typography;
 
 const WEEK_COL_WIDTH = 80;
 const ROW_HEIGHT = 36;
-const TASK_PANEL_WIDTH = 360;
+const TASK_PANEL_DEFAULT_WIDTH = 360;
+const TASK_PANEL_MIN_WIDTH = 300;
+const TASK_PANEL_MAX_WIDTH = 800;
 const DEPTH_INDENT = 20;
 const DEPTH_BG = [
   'transparent',
@@ -299,6 +301,39 @@ const ProjectTimelinePage: React.FC = () => {
   const [subCardType, setSubCardType] = useState<CardType>('task');
   const [subCardTitle, setSubCardTitle] = useState('');
   const [subCardParentType, setSubCardParentType] = useState<string | null>(null);
+
+  // 좌측 패널 리사이즈 상태
+  const [panelWidth, setPanelWidth] = useState(TASK_PANEL_DEFAULT_WIDTH);
+  const isResizing = useRef(false);
+
+  // 리사이즈 핸들 마우스 다운 핸들러
+  const handleResizeStart = useCallback((e: React.MouseEvent) => {
+    isResizing.current = true;
+    const startX = e.clientX;
+    const startWidth = panelWidth;
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      if (!isResizing.current) return;
+      const newWidth = Math.min(
+        TASK_PANEL_MAX_WIDTH,
+        Math.max(TASK_PANEL_MIN_WIDTH, startWidth + (moveEvent.clientX - startX))
+      );
+      setPanelWidth(newWidth);
+    };
+
+    const handleMouseUp = () => {
+      isResizing.current = false;
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  }, [panelWidth]);
 
   // DnD state
   const sensors = useSensors(
@@ -619,7 +654,7 @@ const ProjectTimelinePage: React.FC = () => {
         <div style={{ border: '1px solid #f0f0f0', borderRadius: 4, overflow: 'hidden' }}>
           <div style={{ display: 'flex' }}>
             {/* Left panel: task list */}
-            <div style={{ minWidth: TASK_PANEL_WIDTH, maxWidth: TASK_PANEL_WIDTH, borderRight: '2px solid #e8e8e8', flexShrink: 0 }}>
+            <div style={{ minWidth: panelWidth, maxWidth: panelWidth, flexShrink: 0 }}>
               <div style={{ height: 28, borderBottom: '1px solid #f0f0f0', background: '#fafafa' }} />
               <div style={{
                 height: 28, borderBottom: '2px solid #e8e8e8', background: '#fafafa',
@@ -663,7 +698,7 @@ const ProjectTimelinePage: React.FC = () => {
                       background: '#fff',
                       boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
                       borderRadius: 4,
-                      width: TASK_PANEL_WIDTH - 16,
+                      width: panelWidth - 16,
                       opacity: 0.92,
                     }}>
                       <Tag
@@ -678,6 +713,27 @@ const ProjectTimelinePage: React.FC = () => {
                 </DragOverlay>
               </DndContext>
             </div>
+
+            {/* 리사이즈 핸들: 좌우 패널 경계 드래그 바 */}
+            <div
+              onMouseDown={handleResizeStart}
+              style={{
+                width: 4,
+                cursor: 'col-resize',
+                backgroundColor: 'transparent',
+                flexShrink: 0,
+                borderLeft: '2px solid #e8e8e8',
+                transition: 'background-color 0.2s',
+              }}
+              onMouseEnter={(e) => {
+                (e.target as HTMLElement).style.backgroundColor = '#1890ff';
+              }}
+              onMouseLeave={(e) => {
+                if (!isResizing.current) {
+                  (e.target as HTMLElement).style.backgroundColor = 'transparent';
+                }
+              }}
+            />
 
             {/* Right panel: Gantt chart area */}
             <div style={{ flex: 1, overflowX: 'auto' }}>

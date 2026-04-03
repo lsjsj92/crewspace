@@ -1,0 +1,9 @@
+# backend/requirements-dev.txt
+# 개발/테스트 전용 의존성 (프로덕션에는 설치하지 않음)
+
+-r requirements.txt
+
+pytest==8.3.4
+pytest-asyncio==0.24.0
+factory-boy==3.3.1
+coverage==7.6.10

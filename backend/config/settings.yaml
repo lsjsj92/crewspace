@@ -59,12 +59,12 @@ scheduler:
   archive_interval_hours: 1
 
 auth:
-  access_token_expire_minutes: 15
-  refresh_token_expire_days: 7
+  access_token_expire_minutes: 60
+  refresh_token_expire_days: 30
 
 hr:
   excel_path: "data/auth_member/hr_info.xlsx"
-  default_password: "crewspace1234!"
+  default_password: "1234!"
 
 sidebar:
   recent_projects_count: 5

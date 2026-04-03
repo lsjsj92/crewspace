@@ -70,11 +70,14 @@ HOST_POSTGRES_PORT=5432
 # JWT
 SECRET_KEY=changeme_jwt_secret_key_at_least_32_chars
 ALGORITHM=HS256
-ACCESS_TOKEN_EXPIRE_MINUTES=15
-REFRESH_TOKEN_EXPIRE_DAYS=7
+ACCESS_TOKEN_EXPIRE_MINUTES=60
+REFRESH_TOKEN_EXPIRE_DAYS=30
 
 # CORS
 CORS_ORIGINS=http://localhost:3000,http://localhost:5173
+
+# Email
+EMAIL_DOMAIN=example.com
 
 # Superadmin (최초 실행 시 자동 생성)
 SUPERADMIN_EMAIL=admin@crewspace.local
@@ -143,7 +146,7 @@ npm run dev       # localhost:5173에서 실행, /api 요청은 localhost:8000�
 | Backend | Python 3.12, FastAPI, SQLAlchemy 2.0 (async), Alembic |
 | Frontend | React 18, TypeScript, Ant Design 5, TanStack Query |
 | Database | PostgreSQL 16 |
-| Auth | JWT (Access Token 15min + Refresh Token 7days) |
+| Auth | JWT (Access Token 60min + Refresh Token 30days) |
 | Infra | Docker, Docker Compose, Nginx |
 
 ## 라이선스
