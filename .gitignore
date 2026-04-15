@@ -108,6 +108,9 @@ postgres_data/
 # Output
 output/*.zip
 deploy_transfer/output/*.zip
+*.tar.gz
+*.tgz
+*.tar
 
 # ===== AI tools =====
 CLAUDE.md

@@ -13,6 +13,7 @@ import {
 } from '@dnd-kit/core';
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import { useQuery } from '@tanstack/react-query';
+import dayjs from 'dayjs';
 import type { Card, CardType, CardPriority } from '@/types';
 import { useBoard, useMoveCard, useCreateCard } from '@/hooks/useBoard';
 import { checkDuplicateTitle } from '@/api/cards';
@@ -30,6 +31,8 @@ const PRIORITY_OPTIONS = [
   { value: 'highest', label: 'Highest' },
 ];
 
+const DEFAULT_DUE_DATE_DAYS = 14;
+
 interface KanbanBoardProps {
   projectId: string;
   teamId?: string;
@@ -45,12 +48,13 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ projectId, teamId, prefix, fi
   const { data: cardTypesConfig } = useQuery({
     queryKey: ['card-types-config'],
     queryFn: async () => {
-      const res = await apiClient.get<{ completed_visible_days?: number }>('/card-types');
+      const res = await apiClient.get<{ completed_visible_days?: number; deadline_warning_days?: number }>('/card-types');
       return res.data;
     },
     staleTime: Infinity,
   });
   const completedVisibleDays = cardTypesConfig?.completed_visible_days ?? 3;
+  const deadlineWarningDays = cardTypesConfig?.deadline_warning_days ?? 3;
 
   // 필터 적용: columns의 cards를 필터링 (flat - 선택된 타입만 표시)
   const filteredColumns = useMemo(() => {
@@ -186,7 +190,12 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ projectId, teamId, prefix, fi
   const handleAddCard = useCallback((columnId: string) => {
     setCreateCardColumnId(columnId);
     createCardForm.resetFields();
-    createCardForm.setFieldsValue({ card_type: 'task', priority: 'medium' });
+    createCardForm.setFieldsValue({
+      card_type: 'task',
+      priority: 'medium',
+      start_date: dayjs(),
+      due_date: dayjs().add(DEFAULT_DUE_DATE_DAYS, 'day'),
+    });
     setCreateCardModalOpen(true);
   }, [createCardForm]);
 
@@ -292,6 +301,7 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ projectId, teamId, prefix, fi
               onCardClick={handleCardClick}
               onAddCard={handleAddCard}
               completedVisibleDays={completedVisibleDays}
+              deadlineWarningDays={deadlineWarningDays}
             />
           ))}
         </div>

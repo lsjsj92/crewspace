@@ -15,6 +15,7 @@ interface BoardColumnProps {
   onCardClick: (card: Card) => void;
   onAddCard: (columnId: string) => void;
   completedVisibleDays?: number;
+  deadlineWarningDays?: number;
 }
 
 const BoardColumn: React.FC<BoardColumnProps> = ({
@@ -23,6 +24,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({
   onCardClick,
   onAddCard,
   completedVisibleDays = 3,
+  deadlineWarningDays = 3,
 }) => {
   const { setNodeRef, isOver } = useDroppable({
     id: `column-${column.id}`,
@@ -121,6 +123,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({
               card={card}
               prefix={prefix}
               onClick={onCardClick}
+              deadlineWarningDays={deadlineWarningDays}
             />
           ))}
         </SortableContext>
@@ -141,6 +144,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({
                 card={card}
                 prefix={prefix}
                 onClick={onCardClick}
+                deadlineWarningDays={deadlineWarningDays}
               />
             ))}
           </div>

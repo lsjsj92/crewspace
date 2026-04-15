@@ -359,6 +359,7 @@ const ProjectTimelinePage: React.FC = () => {
     const collectDescendants = (parentId: string) => {
       for (const card of cards) {
         if (card.parent_id === parentId && !matchedIds.has(card.id)) {
+          if (filters.hideCompleted && card.completed_at) continue;
           matchedIds.add(card.id);
           collectDescendants(card.id);
         }
@@ -392,6 +393,8 @@ const ProjectTimelinePage: React.FC = () => {
     const addAncestors = (cardId: string) => {
       const card = cards.find((c) => c.id === cardId);
       if (card?.parent_id && !matchedIds.has(card.parent_id)) {
+        const parentCard = cards.find((c) => c.id === card.parent_id);
+        if (parentCard && filters.hideCompleted && parentCard.completed_at) return;
         matchedIds.add(card.parent_id);
         addAncestors(card.parent_id);
       }
@@ -413,6 +416,7 @@ const ProjectTimelinePage: React.FC = () => {
       createCard(id!, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['project-cards', id] });
+      queryClient.invalidateQueries({ queryKey: ['card-children'] });
     },
   });
 

@@ -1,6 +1,9 @@
 services:
   postgres:
-    image: postgres:16-alpine
+    build:
+      context: .
+      dockerfile_inline: "FROM postgres:16-alpine"
+    image: ax-team-tms-postgres
     container_name: crewspace-postgres
     restart: unless-stopped
     environment:
@@ -14,9 +17,10 @@ services:
       - "${HOST_POSTGRES_PORT:-5432}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-crewspace}"]
-      interval: 5s
+      interval: 30m
       timeout: 5s
-      retries: 5
+      retries: 3
+      start_period: 10s
 
   backend:
     build:

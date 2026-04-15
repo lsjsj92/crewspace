@@ -31,6 +31,7 @@ async def get_card_types() -> dict:
     return {
         "types": config.card_types,
         "completed_visible_days": config.completed_visible_days,
+        "deadline_warning_days": config.deadline_warning_days,
     }
 
 

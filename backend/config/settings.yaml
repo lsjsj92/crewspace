@@ -29,6 +29,7 @@ card:
   position_gap: 1000
   auto_archive_days: 7
   completed_visible_days: 3
+  deadline_warning_days: 3
   types:
     epic:
       color: "#722ed1"

@@ -33,6 +33,8 @@ export interface CardWithProject {
   created_by: string;
   created_at: string;
   project_name: string;
+  parent_title: string | null;
+  parent_card_type: string | null;
 }
 
 export interface MyCardsResponse {

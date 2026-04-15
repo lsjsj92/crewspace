@@ -19,9 +19,9 @@ logger = logging.getLogger(__name__)
 
 
 async def _ensure_superadmin() -> None:
-    """슈퍼관리자 계정을 .env 설정과 동기화한다.
+    """슈퍼관리자 계정을 확인하고, 없으면 .env 설정으로 생성한다.
 
-    매 기동 시 .env의 이메일/비밀번호가 DB에 반영되도록 보장한다.
+    SUPERADMIN_FORCE_SYNC=true일 때만 기존 계정의 이메일/비밀번호를 .env와 동기화한다.
     다중 워커 환경에서 동시 실행되더라도 IntegrityError를 안전하게 처리한다.
     """
     settings = get_settings()
@@ -37,7 +37,14 @@ async def _ensure_superadmin() -> None:
             admin = await repo.get_by_username(settings.SUPERADMIN_USERNAME)
 
         if admin and admin.is_superadmin:
-            # .env 설정과 DB를 동기화
+            if not settings.SUPERADMIN_FORCE_SYNC:
+                logger.info("슈퍼관리자 계정 확인 완료 (기존 자격증명 유지)")
+                return
+
+            # FORCE_SYNC=true: .env 설정과 DB를 동기화
+            logger.warning(
+                "SUPERADMIN_FORCE_SYNC=true: 슈퍼관리자 자격증명을 .env 설정으로 덮어씁니다"
+            )
             changed = False
             if admin.email != settings.SUPERADMIN_EMAIL:
                 admin.email = settings.SUPERADMIN_EMAIL

@@ -90,6 +90,7 @@ export function useCreateCard(projectId: string | undefined) {
     }) => apiCreateCard(projectId!, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['board', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['card-children'] });
     },
   });
 }

@@ -48,6 +48,7 @@ class Settings(BaseSettings):
     SUPERADMIN_EMAIL: str = "admin@crewspace.local"
     SUPERADMIN_USERNAME: str = "admin"
     SUPERADMIN_PASSWORD: str = "changeme_admin_password"
+    SUPERADMIN_FORCE_SYNC: bool = False
 
     model_config = {
         "env_file": str(BASE_DIR / ".env"),
@@ -108,6 +109,10 @@ class AppConfig:
     @property
     def completed_visible_days(self) -> int:
         return self.card.get("completed_visible_days", 3)
+
+    @property
+    def deadline_warning_days(self) -> int:
+        return self.card.get("deadline_warning_days", 3)
 
     @property
     def card_types(self) -> dict[str, dict]:

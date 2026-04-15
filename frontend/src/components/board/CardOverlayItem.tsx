@@ -21,7 +21,7 @@ interface CardOverlayItemProps {
 }
 
 const CardOverlayItem: React.FC<CardOverlayItemProps> = ({ card, prefix }) => {
-  const overdue = isOverdue(card.due_date);
+  const overdue = !card.completed_at && isOverdue(card.due_date);
 
   return (
     <div

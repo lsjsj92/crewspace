@@ -172,6 +172,7 @@ async def get_my_cards(
             CardAssignee.user_id == current_user.id,
             Card.deleted_at.is_(None),
             Card.archived_at.is_(None),
+            Card.cancelled_at.is_(None),
         )
         .order_by(Card.created_at.desc())
     )
@@ -186,6 +187,12 @@ async def get_my_cards(
 
         card_type = card.card_type.value if hasattr(card.card_type, "value") else card.card_type
         priority = card.priority.value if hasattr(card.priority, "value") else card.priority
+
+        parent_title = None
+        parent_card_type = None
+        if card.parent:
+            parent_title = card.parent.title
+            parent_card_type = card.parent.card_type.value if hasattr(card.parent.card_type, "value") else card.parent.card_type
 
         cards.append(
             CardWithProject(
@@ -206,6 +213,8 @@ async def get_my_cards(
                 created_by=card.created_by,
                 created_at=card.created_at,
                 project_name=project_name,
+                parent_title=parent_title,
+                parent_card_type=parent_card_type,
             )
         )
 

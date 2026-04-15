@@ -37,6 +37,8 @@ class CardWithProject(BaseModel):
     created_by: UUID
     created_at: datetime
     project_name: str
+    parent_title: str | None = None
+    parent_card_type: str | None = None
 
     model_config = {"from_attributes": True}
 

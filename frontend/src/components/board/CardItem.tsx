@@ -3,6 +3,7 @@ import { Card as AntCard, Tag, Avatar, Tooltip, Typography, Space } from 'antd';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { ClockCircleOutlined } from '@ant-design/icons';
+import dayjs from 'dayjs';
 import type { Card } from '@/types';
 import { formatDate, isOverdue } from '@/utils/date';
 import { getCardTypeColor, getCardTypeIcon, getCardTypeLabel } from '@/constants/cardTypes';
@@ -29,9 +30,10 @@ interface CardItemProps {
   card: Card;
   prefix: string;
   onClick: (card: Card) => void;
+  deadlineWarningDays?: number;
 }
 
-const CardItem: React.FC<CardItemProps> = ({ card, prefix, onClick }) => {
+const CardItem: React.FC<CardItemProps> = ({ card, prefix, onClick, deadlineWarningDays = 3 }) => {
   const {
     attributes,
     listeners,
@@ -55,7 +57,11 @@ const CardItem: React.FC<CardItemProps> = ({ card, prefix, onClick }) => {
     marginBottom: 8,
   };
 
-  const overdue = isOverdue(card.due_date);
+  const overdue = !card.completed_at && isOverdue(card.due_date);
+  const approaching = !card.completed_at && !overdue && card.due_date
+    && dayjs(card.due_date).diff(dayjs().startOf('day'), 'day') <= deadlineWarningDays;
+
+  const dueDateColor = overdue ? '#f5222d' : approaching ? '#faad14' : '#8c8c8c';
 
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
@@ -113,7 +119,7 @@ const CardItem: React.FC<CardItemProps> = ({ card, prefix, onClick }) => {
               {card.due_date && (
                 <Tooltip title={`Due: ${formatDate(card.due_date)}`}>
                   <Text
-                    style={{ fontSize: 11, color: overdue ? '#f5222d' : '#8c8c8c' }}
+                    style={{ fontSize: 11, color: dueDateColor }}
                   >
                     <ClockCircleOutlined /> {formatDate(card.due_date)}
                   </Text>
