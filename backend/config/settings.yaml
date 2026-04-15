@@ -60,7 +60,7 @@ scheduler:
   archive_interval_hours: 1
 
 auth:
-  access_token_expire_minutes: 60
+  access_token_expire_minutes: 300
   refresh_token_expire_days: 30
 
 hr:

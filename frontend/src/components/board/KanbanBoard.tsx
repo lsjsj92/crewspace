@@ -51,7 +51,6 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ projectId, teamId, prefix, fi
       const res = await apiClient.get<{ completed_visible_days?: number; deadline_warning_days?: number }>('/card-types');
       return res.data;
     },
-    staleTime: Infinity,
   });
   const completedVisibleDays = cardTypesConfig?.completed_visible_days ?? 3;
   const deadlineWarningDays = cardTypesConfig?.deadline_warning_days ?? 3;

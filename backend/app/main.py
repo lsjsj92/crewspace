@@ -12,6 +12,7 @@ from app.config import get_settings
 from app.database import engine, async_session_factory
 from app.api.router import api_router
 from app.exceptions.handlers import register_exception_handlers
+from app.middleware.cache_control import CacheControlMiddleware
 from app.middleware.logging_middleware import LoggingMiddleware
 from app.tasks.scheduler import start_scheduler, stop_scheduler
 
@@ -110,6 +111,7 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
     app.add_middleware(LoggingMiddleware)
+    app.add_middleware(CacheControlMiddleware)
 
     app.include_router(api_router, prefix="/api/v1")
 
