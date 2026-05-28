@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile_inline: "FROM postgres:16-alpine"
-    image: ax-team-tms-postgres
+    image: crewspace-postgres
     container_name: crewspace-postgres
     restart: unless-stopped
     environment:
@@ -26,6 +26,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+    image: crewspace-backend
     container_name: crewspace-backend
     restart: unless-stopped
     env_file:
@@ -44,6 +45,7 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+    image: crewspace-frontend
     container_name: crewspace-frontend
     restart: unless-stopped
     environment:
