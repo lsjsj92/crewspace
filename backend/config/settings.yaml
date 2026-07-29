@@ -30,6 +30,8 @@ card:
   auto_archive_days: 7
   completed_visible_days: 3
   deadline_warning_days: 3
+  # 카드가 가질 수 있는 최대 상위 카드 수 (주 부모 + 보조 연결 합계)
+  max_parents: 5
   types:
     epic:
       color: "#722ed1"
@@ -37,27 +39,43 @@ card:
       allowed_parents: []
       can_be_independent: true
       display_order: 0
+      default_duration:
+        unit: "month"
+        amount: 3
     story:
       color: "#1890ff"
       icon: "BookOutlined"
       allowed_parents: ["epic"]
       can_be_independent: false
       display_order: 1
+      default_duration:
+        unit: "month"
+        amount: 1
     task:
       color: "#52c41a"
       icon: "CheckSquareOutlined"
       allowed_parents: ["epic", "story"]
       can_be_independent: true
       display_order: 2
+      default_duration:
+        unit: "week"
+        amount: 2
     sub_task:
       color: "#faad14"
       icon: "MinusSquareOutlined"
       allowed_parents: ["task"]
       can_be_independent: false
       display_order: 3
+      default_duration:
+        unit: "week"
+        amount: 1
 
 scheduler:
   archive_interval_hours: 1
+
+wbs:
+  # WBS Excel 간트 영역의 최대 일수 (비정상 날짜로 인한 과도한 열 생성 방지)
+  max_gantt_days: 400
 
 auth:
   access_token_expire_minutes: 300

@@ -115,6 +115,11 @@ class AppConfig:
         return self.card.get("deadline_warning_days", 3)
 
     @property
+    def max_parents(self) -> int:
+        """카드가 가질 수 있는 최대 상위 카드 수 (주 부모 + 보조 연결 합계)."""
+        return self.card.get("max_parents", 5)
+
+    @property
     def card_types(self) -> dict[str, dict]:
         return self.card.get("types", {})
 
@@ -140,8 +145,25 @@ class AppConfig:
         }
 
     @property
+    def default_durations(self) -> dict[str, dict[str, Any]]:
+        """카드 타입별 기본 기간 설정 (unit: month|week, amount: int)."""
+        return {
+            ct: info["default_duration"]
+            for ct, info in self.card_types.items()
+            if isinstance(info.get("default_duration"), dict)
+        }
+
+    @property
     def archive_interval_hours(self) -> int:
         return self.scheduler.get("archive_interval_hours", 1)
+
+    @property
+    def wbs(self) -> dict[str, Any]:
+        return self._data.get("wbs", {})
+
+    @property
+    def wbs_max_gantt_days(self) -> int:
+        return self.wbs.get("max_gantt_days", 400)
 
     @property
     def hr(self) -> dict[str, Any]:

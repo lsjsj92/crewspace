@@ -102,6 +102,36 @@ class Card(Base, TimestampMixin, SoftDeleteMixin):
         return f"<Card(id={self.id}, card_number={self.card_number}, title={self.title})>"
 
 
+class CardLink(Base):
+    """카드-보조 상위 카드 연결 (다중 부모 지원).
+
+    parent_id(주 부모) 외에 추가로 연결된 Epic/Story를 저장한다.
+    주 부모를 포함한 총 부모 수 제한은 서비스 레이어에서 설정값으로 검증한다.
+    """
+
+    __tablename__ = "card_links"
+    __table_args__ = (
+        UniqueConstraint("card_id", "parent_id", name="uq_card_links_card_parent"),
+        Index("ix_card_links_parent_id", "parent_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
+    )
+    card_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("cards.id"), nullable=False
+    )
+    parent_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("cards.id"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    def __repr__(self) -> str:
+        return f"<CardLink(card_id={self.card_id}, parent_id={self.parent_id})>"
+
+
 class CardAssignee(Base):
     __tablename__ = "card_assignees"
     __table_args__ = (

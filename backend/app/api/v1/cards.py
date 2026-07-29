@@ -1,13 +1,13 @@
+from urllib.parse import quote
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_active_user
 from app.config import get_app_config
 from app.database import get_db
 from app.models.user import User
-from app.repositories.card_repository import CardRepository
 from app.schemas.card import (
     CardAssigneeRequest,
     CardAssigneeResponse,
@@ -17,11 +17,14 @@ from app.schemas.card import (
     CardReorderRequest,
     CardResponse,
     CardUpdateRequest,
+    CardWithChildrenResponse,
 )
 from app.schemas.common import MessageResponse
-from app.services import card_service
+from app.services import card_service, wbs_export_service
 
 router = APIRouter()
+
+XLSX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 
 @router.get("/card-types")
@@ -41,19 +44,20 @@ async def list_project_cards(
     type: str | None = Query(None, description="Filter by card type"),
     assignee: UUID | None = Query(None, description="Filter by assignee user ID"),
     priority: str | None = Query(None, description="Filter by priority"),
+    include_archived: bool = Query(False, description="Include archived cards (timeline full view)"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ) -> list[CardResponse]:
     """List all cards in a project with optional filters."""
-    from app.services.project_permission_service import check_project_permission
-    await check_project_permission(db, project_id, current_user, ["manager", "member", "viewer"])
-    repo = CardRepository(db)
-    cards = await repo.get_project_cards(
-        project_id, card_type=type, assignee_id=assignee, priority=priority
+    return await card_service.list_cards(
+        db,
+        project_id,
+        current_user,
+        card_type=type,
+        assignee_id=assignee,
+        priority=priority,
+        include_archived=include_archived,
     )
-    from app.services.card_service import _get_project_prefix, _card_to_response
-    prefix = await _get_project_prefix(db, project_id)
-    return [_card_to_response(c, prefix) for c in cards]
 
 
 @router.get("/projects/{project_id}/cards/check-duplicate")
@@ -66,18 +70,27 @@ async def check_duplicate_title(
     current_user: User = Depends(get_current_active_user),
 ) -> dict:
     """Check if a card with the same title and type exists in the project."""
-    from app.services.project_permission_service import check_project_permission
-    await check_project_permission(db, project_id, current_user, ["manager", "member", "viewer"])
-    repo = CardRepository(db)
-    duplicates = await repo.find_by_title(project_id, title, card_type, exclude_card_id)
-    return {
-        "has_duplicate": len(duplicates) > 0,
-        "count": len(duplicates),
-        "cards": [
-            {"id": str(c.id), "card_number": c.card_number, "title": c.title}
-            for c in duplicates
-        ],
-    }
+    return await card_service.find_duplicate_titles(
+        db, project_id, title, card_type, exclude_card_id, current_user
+    )
+
+
+@router.get("/projects/{project_id}/wbs-export")
+async def export_project_wbs(
+    project_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+) -> Response:
+    """프로젝트 카드를 Epic별 시트로 구성한 WBS Excel 파일로 다운로드한다."""
+    content, filename = await wbs_export_service.export_project_wbs(db, project_id, current_user)
+    encoded_filename = quote(filename)
+    return Response(
+        content=content,
+        media_type=XLSX_MEDIA_TYPE,
+        headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}",
+        },
+    )
 
 
 @router.post("/projects/{project_id}/cards", response_model=CardResponse, status_code=201)
@@ -145,13 +158,13 @@ async def reorder_card(
     return await card_service.reorder_in_hierarchy(db, card_id, data, current_user)
 
 
-@router.get("/cards/{card_id}/children", response_model=list[CardResponse])
+@router.get("/cards/{card_id}/children", response_model=list[CardWithChildrenResponse])
 async def get_children(
     card_id: UUID,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
-) -> list[CardResponse]:
-    """Get child cards of a card."""
+) -> list[CardWithChildrenResponse]:
+    """Get child cards of a card, each with its direct children."""
     return await card_service.get_children(db, card_id, current_user)
 
 

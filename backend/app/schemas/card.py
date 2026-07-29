@@ -14,6 +14,8 @@ class CardCreateRequest(BaseModel):
     description: str | None = None
     card_type: str = Field(..., pattern="^(epic|story|task|sub_task)$")
     parent_id: UUID | None = None
+    # 보조 상위 카드 연결 (다중 부모, 최대 개수는 서비스에서 설정값으로 검증)
+    linked_parent_ids: list[UUID] = Field(default_factory=list)
     priority: str = Field(default="medium", pattern="^(lowest|low|medium|high|highest)$")
     start_date: date | None = None
     due_date: date | None = None
@@ -24,6 +26,8 @@ class CardUpdateRequest(BaseModel):
     title: str | None = Field(None, min_length=1, max_length=500)
     description: str | None = None
     parent_id: UUID | None = None
+    # None이면 변경 없음, 리스트이면 보조 상위 카드 연결을 전체 교체
+    linked_parent_ids: list[UUID] | None = None
     priority: str | None = Field(None, pattern="^(lowest|low|medium|high|highest)$")
     start_date: date | None = None
     due_date: date | None = None
@@ -42,6 +46,16 @@ class CardAssigneeResponse(BaseModel):
     assigned_at: datetime
     user: UserResponse | None = None
 
+    model_config = {"from_attributes": True}
+
+
+class ParentCardInfo(BaseModel):
+    id: UUID
+    card_type: str
+    card_number: int
+    title: str
+    # 상위 카드 체인 (예: Task -> Story -> Epic) 표시를 위한 재귀 참조
+    parent: "ParentCardInfo | None" = None
     model_config = {"from_attributes": True}
 
 
@@ -64,6 +78,10 @@ class CardResponse(BaseModel):
     created_by: UUID
     created_at: datetime
     prefix: str = ""
+    column_name: str = ""
+    parent: ParentCardInfo | None = None
+    # 보조 연결로 노출된 카드 여부 (부모 카드의 sub-cards 목록에서 사용)
+    is_linked: bool = False
     assignees: list[CardAssigneeResponse] = []
 
     @computed_field
@@ -74,19 +92,17 @@ class CardResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class ParentCardInfo(BaseModel):
-    id: UUID
-    card_type: str
-    card_number: int
-    title: str
+class CardWithChildrenResponse(CardResponse):
+    children: list[CardResponse] = []
+
     model_config = {"from_attributes": True}
 
 
-class CardDetailResponse(CardResponse):
+class CardDetailResponse(CardWithChildrenResponse):
     labels: list[LabelResponse] = []
-    children: list["CardResponse"] = []
     comments: list[CommentResponse] = []
-    parent: ParentCardInfo | None = None
+    # 보조로 연결된 상위 카드 목록 (다중 부모)
+    linked_parents: list[ParentCardInfo] = []
 
     model_config = {"from_attributes": True}
 

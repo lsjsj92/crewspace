@@ -2,13 +2,13 @@ from uuid import UUID
 
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from app.config import get_app_config
 from app.exceptions.base import BadRequestException, NotFoundException
 from app.models.board_column import BoardColumn
 from app.models.card import Card
 from app.models.user import User
+from app.repositories.card_repository import CardRepository
 from app.schemas.board import (
     ColumnCreateRequest,
     ColumnReorderRequest,
@@ -16,17 +16,9 @@ from app.schemas.board import (
     ColumnUpdateRequest,
     ColumnWithCardsResponse,
 )
-from app.schemas.card import CardAssigneeResponse, CardResponse
+from app.services.card_service import card_to_response
 from app.services.project_permission_service import check_project_permission
 from app.utils.datetime_utils import now_kst
-
-
-def _card_to_response(card: Card, prefix: str) -> CardResponse:
-    """Card 모델을 CardResponse로 변환하고 프로젝트 prefix와 assignees를 설정한다."""
-    resp = CardResponse.model_validate(card)
-    resp.prefix = prefix
-    resp.assignees = [CardAssigneeResponse.model_validate(a) for a in (card.assignees or [])]
-    return resp
 
 
 def _column_to_response(column: BoardColumn) -> ColumnResponse:
@@ -73,21 +65,11 @@ async def get_board(db: AsyncSession, project_id: UUID, current_user: User | Non
     project = proj_result.scalar_one_or_none()
     prefix = project.prefix if project else ""
 
+    card_repo = CardRepository(db)
     result: list[ColumnWithCardsResponse] = []
     for col in columns:
-        # Get non-archived cards for this column, sorted by position
-        # assignees를 함께 로드하여 N+1 쿼리를 방지한다
-        cards_result = await db.execute(
-            select(Card)
-            .where(
-                Card.column_id == col.id,
-                Card.archived_at.is_(None),
-                Card.deleted_at.is_(None),
-            )
-            .options(selectinload(Card.assignees))
-            .order_by(Card.position)
-        )
-        cards = list(cards_result.scalars().all())
+        # 컬럼별 카드 조회 (assignees, 상위 카드 체인 eager 로딩 포함)
+        cards = await card_repo.get_column_cards(col.id)
 
         col_resp = ColumnWithCardsResponse(
             id=col.id,
@@ -96,7 +78,7 @@ async def get_board(db: AsyncSession, project_id: UUID, current_user: User | Non
             position=col.position,
             is_end=col.is_end,
             wip_limit=col.wip_limit,
-            cards=[_card_to_response(c, prefix) for c in cards],
+            cards=[card_to_response(c, prefix) for c in cards],
         )
         result.append(col_resp)
 

@@ -3,7 +3,7 @@ from .user import User
 from .team import Team, TeamMember, TeamRole
 from .project import Project, ProjectStatus
 from .board_column import BoardColumn
-from .card import Card, CardAssignee, CardType, CardPriority
+from .card import Card, CardAssignee, CardLink, CardType, CardPriority
 from .label import Label, CardLabel
 from .comment import CardComment
 from .project_outcome import ProjectOutcome
@@ -23,6 +23,7 @@ __all__ = [
     "BoardColumn",
     "Card",
     "CardAssignee",
+    "CardLink",
     "CardType",
     "CardPriority",
     "Label",
