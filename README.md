@@ -83,6 +83,12 @@ EMAIL_DOMAIN=example.com
 SUPERADMIN_EMAIL=admin@crewspace.local
 SUPERADMIN_USERNAME=admin
 SUPERADMIN_PASSWORD=changeme_admin_password
+SUPERADMIN_FORCE_SYNC=false  # true면 매 기동마다 위 계정 정보로 강제 동기화
+
+# Backend 기동 옵션 (선택, 기본값 사용 시 생략 가능)
+MIGRATION_MAX_RETRIES=30     # DB 준비 대기용 마이그레이션 재시도 횟수
+MIGRATION_RETRY_DELAY=2      # 재시도 간격(초)
+UVICORN_WORKERS=2            # 백엔드 워커 프로세스 수
 ```
 
 `POSTGRES_PASSWORD`, `SECRET_KEY`, `SUPERADMIN_PASSWORD`는 반드시 기본값에서 변경하는 것을 권장합니다.
@@ -91,21 +97,28 @@ SUPERADMIN_PASSWORD=changeme_admin_password
 Docker로 실행하는 것을 권장합니다.
 
 ```bash
-docker-compose up --build
+docker compose up -d --build
 ```
 
-최초 실행 시 DB 마이그레이션이 자동으로 적용됩니다.
+최초 실행 시 DB 마이그레이션이 자동으로 적용됩니다. 백엔드는 PostgreSQL이 완전히 준비된 뒤에
+기동하며, 마이그레이션이 실패하면 `MIGRATION_MAX_RETRIES` 횟수만큼 재시도합니다.
 
 ```bash
-# 백그라운드 실행
-docker-compose up -d --build
+# 코드 변경 없이 재시작 (이미지 재빌드 불필요)
+docker compose up -d
 
 # 로그 확인
-docker-compose logs -f backend
+docker compose logs -f backend
 
-# 중지
-docker-compose down
+# 상태 확인
+docker compose ps
+
+# 중지 (데이터는 named volume에 보존됨)
+docker compose down
 ```
+
+> `--build`는 코드나 의존성이 바뀐 경우에만 필요합니다.
+> `docker compose down -v`는 DB 볼륨까지 삭제하므로 주의하세요.
 
 ### 3-B. 직접 실행
 
@@ -138,6 +151,25 @@ npm run dev       # localhost:5173에서 실행, /api 요청은 localhost:8000�
 
 최초 로그인은 `.env`에 설정한 Superadmin 계정으로 합니다.
 
+## 폐쇄망 배포
+
+인터넷이 차단된 서버에 배포할 수 있도록, Docker 이미지와 스크립트를 하나의 tar.gz로 묶는
+오프라인 배포 패키지를 제공합니다.
+
+```bash
+# 온라인 PC에서 패키지 생성 (이미지 빌드 + docker save + 패키징)
+bash deploy/scripts/prepare-offline.sh
+
+# 폐쇄망 서버에서 배포
+tar xzf ax-team-task-manage-deploy-YYYYMMDD.tar.gz
+cd deploy && bash scripts/deploy.sh
+```
+
+배포 시 이미지는 `docker load`로만 공급되며, Compose가 레지스트리에 접근하지 않도록
+모든 서비스에 `pull_policy: never`가 설정되어 있습니다.
+
+기존 DB 유지, 구버전 스택에서의 데이터 이관, 백업/복원, 문제 해결은
+**[deploy/README.md](deploy/README.md)** 를 참고하세요.
 
 ## 기술 스택
 

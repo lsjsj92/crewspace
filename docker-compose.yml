@@ -16,11 +16,14 @@ services:
     ports:
       - "${HOST_POSTGRES_PORT:-5432}:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-crewspace}"]
-      interval: 30m
+      # 초기화용 임시 서버는 유닉스 소켓만 열고 TCP를 열지 않으며,
+      # pg_isready는 DB 존재 여부를 검사하지 않아 초기화 중에도 통과한다.
+      # TCP로 대상 DB에 실제 쿼리를 실행해 진짜 준비 상태만 통과시킨다.
+      test: ['CMD-SHELL', 'PGPASSWORD="$$POSTGRES_PASSWORD" psql -h 127.0.0.1 -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -c "SELECT 1" >/dev/null 2>&1']
+      interval: 5s
       timeout: 5s
-      retries: 3
-      start_period: 10s
+      retries: 20
+      start_period: 60s
 
   backend:
     build:
