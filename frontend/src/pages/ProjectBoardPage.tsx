@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Typography, Segmented, Spin, Breadcrumb } from 'antd';
+import { Typography, Segmented, Spin, Breadcrumb, Space } from 'antd';
 import {
   AppstoreOutlined,
   FieldTimeOutlined,
@@ -10,6 +10,7 @@ import { useQuery } from '@tanstack/react-query';
 import { getProject, getProjectMembers } from '@/api/projects';
 import KanbanBoard from '@/components/board/KanbanBoard';
 import BoardFilterBar, { BoardFilters, EMPTY_FILTERS } from '@/components/common/BoardFilterBar';
+import WbsExportButton from '@/components/common/WbsExportButton';
 
 const { Title } = Typography;
 
@@ -87,15 +88,18 @@ const ProjectBoardPage: React.FC = () => {
         <Title level={3} style={{ margin: 0 }}>
           {project.name}
         </Title>
-        <Segmented
-          value="Board"
-          onChange={handleViewChange}
-          options={[
-            { label: 'Board', value: 'Board', icon: <AppstoreOutlined /> },
-            { label: 'Timeline', value: 'Timeline', icon: <FieldTimeOutlined /> },
-            { label: 'Settings', value: 'Settings', icon: <SettingOutlined /> },
-          ]}
-        />
+        <Space size={8}>
+          <WbsExportButton projectId={id} projectName={project.name} />
+          <Segmented
+            value="Board"
+            onChange={handleViewChange}
+            options={[
+              { label: 'Board', value: 'Board', icon: <AppstoreOutlined /> },
+              { label: 'Timeline', value: 'Timeline', icon: <FieldTimeOutlined /> },
+              { label: 'Settings', value: 'Settings', icon: <SettingOutlined /> },
+            ]}
+          />
+        </Space>
       </div>
 
       <BoardFilterBar

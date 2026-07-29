@@ -6,6 +6,11 @@ import {
   MinusSquareOutlined,
 } from '@ant-design/icons';
 
+export interface CardTypeDuration {
+  unit: 'month' | 'week' | 'day';
+  amount: number;
+}
+
 export interface CardTypeConfig {
   color: string;
   icon: React.ComponentType<{ style?: React.CSSProperties }>;
@@ -14,6 +19,17 @@ export interface CardTypeConfig {
   canBeIndependent: boolean;
   displayOrder: number;
 }
+
+// 카드가 가질 수 있는 최대 상위 카드 수 (주 부모 + 보조 연결 합계, backend settings.yaml card.max_parents와 동일)
+export const MAX_CARD_PARENTS = 5;
+
+// 카드 생성 시 종료일 기본 기간 (backend settings.yaml card.types.*.default_duration의 폴백)
+export const DEFAULT_CARD_DURATIONS: Record<string, CardTypeDuration> = {
+  epic: { unit: 'month', amount: 3 },
+  story: { unit: 'month', amount: 1 },
+  task: { unit: 'week', amount: 2 },
+  sub_task: { unit: 'week', amount: 1 },
+};
 
 export const CARD_TYPE_CONFIG: Record<string, CardTypeConfig> = {
   epic: {

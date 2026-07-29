@@ -5,6 +5,7 @@ export interface CardFilters {
   card_type?: CardType;
   priority?: CardPriority;
   assignee_id?: string;
+  include_archived?: boolean;
 }
 
 export async function getProjectCards(
@@ -17,6 +18,25 @@ export async function getProjectCards(
   return response.data;
 }
 
+export async function downloadProjectWbs(projectId: string, fallbackName: string): Promise<void> {
+  const response = await apiClient.get<Blob>(`/projects/${projectId}/wbs-export`, {
+    responseType: 'blob',
+  });
+  // Content-Disposition의 filename*=UTF-8'' 값에서 파일명 추출
+  const disposition: string = response.headers['content-disposition'] || '';
+  const match = disposition.match(/filename\*=UTF-8''([^;]+)/);
+  const filename = match ? decodeURIComponent(match[1]) : `${fallbackName}_WBS.xlsx`;
+
+  const url = URL.createObjectURL(response.data);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
 export async function createCard(
   projectId: string,
   data: {
@@ -25,6 +45,7 @@ export async function createCard(
     card_type?: CardType;
     column_id?: string;
     parent_id?: string | null;
+    linked_parent_ids?: string[];
     priority?: CardPriority;
     start_date?: string | null;
     due_date?: string | null;

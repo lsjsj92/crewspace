@@ -69,17 +69,21 @@ export interface BoardColumn {
 export type CardType = 'epic' | 'story' | 'task' | 'sub_task';
 export type CardPriority = 'lowest' | 'low' | 'medium' | 'high' | 'highest';
 
+export interface ParentCardInfo {
+  id: string;
+  card_type: CardType;
+  card_number: number;
+  title: string;
+  parent?: ParentCardInfo | null;
+}
+
 export interface Card {
   id: string;
   project_id: string;
   column_id: string;
+  column_name?: string;
   parent_id: string | null;
-  parent?: {
-    id: string;
-    card_type: CardType;
-    card_number: number;
-    title: string;
-  } | null;
+  parent?: ParentCardInfo | null;
   card_type: CardType;
   card_number: number;
   title: string;
@@ -98,6 +102,10 @@ export interface Card {
   labels?: CardLabel[];
   children?: Card[];
   comments?: Comment[];
+  // 보조 연결(다중 부모)로 노출된 카드 여부 (부모의 sub-cards 목록에서 사용)
+  is_linked?: boolean;
+  // 보조로 연결된 상위 카드 목록 (다중 부모, 상세 응답에만 포함)
+  linked_parents?: ParentCardInfo[];
 }
 
 export interface CardAssignee {

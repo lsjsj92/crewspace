@@ -13,12 +13,18 @@ import {
 } from '@dnd-kit/core';
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import { useQuery } from '@tanstack/react-query';
-import dayjs from 'dayjs';
+import type dayjs from 'dayjs';
 import type { Card, CardType, CardPriority } from '@/types';
 import { useBoard, useMoveCard, useCreateCard } from '@/hooks/useBoard';
 import { checkDuplicateTitle } from '@/api/cards';
 import apiClient from '@/api/client';
-import { CARD_TYPE_CONFIG, getAllowedChildTypes } from '@/constants/cardTypes';
+import {
+  CARD_TYPE_CONFIG,
+  DEFAULT_CARD_DURATIONS,
+  getAllowedChildTypes,
+  type CardTypeDuration,
+} from '@/constants/cardTypes';
+import { addDuration, todayKst } from '@/utils/date';
 import BoardColumn from './BoardColumn';
 import CardDetailDrawer from './CardDetailDrawer';
 import CardOverlayItem from './CardOverlayItem';
@@ -31,7 +37,11 @@ const PRIORITY_OPTIONS = [
   { value: 'highest', label: 'Highest' },
 ];
 
-const DEFAULT_DUE_DATE_DAYS = 14;
+interface CardTypesConfigResponse {
+  types?: Record<string, { default_duration?: CardTypeDuration }>;
+  completed_visible_days?: number;
+  deadline_warning_days?: number;
+}
 
 interface KanbanBoardProps {
   projectId: string;
@@ -48,12 +58,21 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ projectId, teamId, prefix, fi
   const { data: cardTypesConfig } = useQuery({
     queryKey: ['card-types-config'],
     queryFn: async () => {
-      const res = await apiClient.get<{ completed_visible_days?: number; deadline_warning_days?: number }>('/card-types');
+      const res = await apiClient.get<CardTypesConfigResponse>('/card-types');
       return res.data;
     },
   });
   const completedVisibleDays = cardTypesConfig?.completed_visible_days ?? 3;
   const deadlineWarningDays = cardTypesConfig?.deadline_warning_days ?? 3;
+
+  // 카드 타입별 기본 기간: 서버 설정 우선, 없으면 프론트 폴백 상수 사용
+  const getDurationForType = useCallback(
+    (cardType: string): CardTypeDuration =>
+      cardTypesConfig?.types?.[cardType]?.default_duration
+      || DEFAULT_CARD_DURATIONS[cardType]
+      || DEFAULT_CARD_DURATIONS.task,
+    [cardTypesConfig]
+  );
 
   // 필터 적용: columns의 cards를 필터링 (flat - 선택된 타입만 표시)
   const filteredColumns = useMemo(() => {
@@ -89,6 +108,7 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ projectId, teamId, prefix, fi
   const [createCardModalOpen, setCreateCardModalOpen] = useState(false);
   const [createCardColumnId, setCreateCardColumnId] = useState<string | null>(null);
   const [createCardForm] = Form.useForm();
+  const createCardStartDate = Form.useWatch<dayjs.Dayjs | undefined>('start_date', createCardForm);
 
   // Sub-card modal state
   const [subCardModalOpen, setSubCardModalOpen] = useState(false);
@@ -185,18 +205,19 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ projectId, teamId, prefix, fi
     }, 500);
   }, [projectId, prefix]);
 
-  // Add card 버튼 클릭 시 Modal 열기
+  // Add card 버튼 클릭 시 Modal 열기 (KST 오늘 + 타입별 기본 기간으로 날짜 프리필)
   const handleAddCard = useCallback((columnId: string) => {
     setCreateCardColumnId(columnId);
     createCardForm.resetFields();
+    const start = todayKst();
     createCardForm.setFieldsValue({
       card_type: 'task',
       priority: 'medium',
-      start_date: dayjs(),
-      due_date: dayjs().add(DEFAULT_DUE_DATE_DAYS, 'day'),
+      start_date: start,
+      due_date: addDuration(start, getDurationForType('task')),
     });
     setCreateCardModalOpen(true);
-  }, [createCardForm]);
+  }, [createCardForm, getDurationForType]);
 
   // Add card Modal 제출
   const handleCreateCardSubmit = useCallback((values: {
@@ -366,6 +387,9 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ projectId, teamId, prefix, fi
               onChange={(value: string) => {
                 const title = createCardForm.getFieldValue('title');
                 if (title) handleTitleCheck(title, value);
+                // 타입 변경 시 종료일을 타입별 기본 기간으로 재계산
+                const start = createCardForm.getFieldValue('start_date') || todayKst();
+                createCardForm.setFieldValue('due_date', addDuration(start, getDurationForType(value)));
               }}
             />
           </Form.Item>
@@ -387,10 +411,27 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ projectId, teamId, prefix, fi
           </Form.Item>
           <div style={{ display: 'flex', gap: 12 }}>
             <Form.Item name="start_date" label="Start Date" style={{ flex: 1 }}>
-              <DatePicker style={{ width: '100%' }} />
+              <DatePicker
+                style={{ width: '100%' }}
+                onChange={(date) => {
+                  // 시작일이 종료일보다 늦어지면 종료일을 기본 기간으로 재계산
+                  if (!date) return;
+                  const due = createCardForm.getFieldValue('due_date');
+                  if (due && due.isBefore(date, 'day')) {
+                    const cardType = createCardForm.getFieldValue('card_type') || 'task';
+                    createCardForm.setFieldValue('due_date', addDuration(date, getDurationForType(cardType)));
+                  }
+                }}
+              />
             </Form.Item>
             <Form.Item name="due_date" label="Due Date" style={{ flex: 1 }}>
-              <DatePicker style={{ width: '100%' }} />
+              <DatePicker
+                style={{ width: '100%' }}
+                disabledDate={(d) =>
+                  createCardStartDate ? d.isBefore(createCardStartDate, 'day') : false
+                }
+                defaultPickerValue={createCardStartDate || undefined}
+              />
             </Form.Item>
           </div>
         </Form>

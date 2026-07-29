@@ -4,9 +4,20 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { ClockCircleOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
-import type { Card } from '@/types';
+import type { Card, ParentCardInfo } from '@/types';
 import { formatDate, isOverdue } from '@/utils/date';
 import { getCardTypeColor, getCardTypeIcon, getCardTypeLabel } from '@/constants/cardTypes';
+
+// 상위 카드 체인을 최상위(Epic)부터 순서대로 배열로 변환한다
+function buildParentChain(parent: ParentCardInfo | null | undefined): ParentCardInfo[] {
+  const chain: ParentCardInfo[] = [];
+  let current = parent ?? null;
+  while (current) {
+    chain.push(current);
+    current = current.parent ?? null;
+  }
+  return chain.reverse();
+}
 
 const { Text } = Typography;
 
@@ -63,6 +74,9 @@ const CardItem: React.FC<CardItemProps> = ({ card, prefix, onClick, deadlineWarn
 
   const dueDateColor = overdue ? '#f5222d' : approaching ? '#faad14' : '#8c8c8c';
 
+  const parentChain = buildParentChain(card.parent);
+  const parentPathText = parentChain.map((p) => p.title).join(' > ');
+
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
       <AntCard
@@ -85,6 +99,31 @@ const CardItem: React.FC<CardItemProps> = ({ card, prefix, onClick, deadlineWarn
               {prefix}-{card.card_number}
             </Text>
           </div>
+
+          {parentChain.length > 0 && (
+            <Tooltip title={parentPathText}>
+              <div
+                style={{
+                  fontSize: 10,
+                  color: '#8c8c8c',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {parentChain.map((p, i) => {
+                  const ParentIcon = getCardTypeIcon(p.card_type);
+                  return (
+                    <span key={p.id}>
+                      {i > 0 && <span style={{ margin: '0 3px' }}>{'>'}</span>}
+                      <ParentIcon style={{ color: getCardTypeColor(p.card_type), fontSize: 9, marginRight: 2 }} />
+                      {p.title}
+                    </span>
+                  );
+                })}
+              </div>
+            </Tooltip>
+          )}
 
           <Text strong style={{ fontSize: 13 }}>
             {card.title}

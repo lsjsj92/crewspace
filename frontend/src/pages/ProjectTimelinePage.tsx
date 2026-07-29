@@ -1,6 +1,6 @@
-import React, { useState, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Typography, Segmented, Spin, Breadcrumb, Empty, Tag, Tooltip, Modal, Input, Select } from 'antd';
+import { Typography, Segmented, Spin, Breadcrumb, Empty, Tag, Tooltip, Modal, Input, Select, Space } from 'antd';
 import {
   AppstoreOutlined,
   FieldTimeOutlined,
@@ -28,6 +28,8 @@ import { getProjectCards, createCard, reorderCard } from '@/api/cards';
 import { getCardTypeColor, getCardTypeIcon, CARD_TYPE_SORT_ORDER, CARD_TYPE_CONFIG, getAllowedChildTypes } from '@/constants/cardTypes';
 import CardDetailDrawer from '@/components/board/CardDetailDrawer';
 import BoardFilterBar, { BoardFilters, EMPTY_FILTERS } from '@/components/common/BoardFilterBar';
+import WbsExportButton from '@/components/common/WbsExportButton';
+import { todayKst } from '@/utils/date';
 import type { Card, CardType } from '@/types';
 
 dayjs.extend(isoWeek);
@@ -90,6 +92,32 @@ interface TimelineNode {
   card: Card;
   children: TimelineNode[];
   depth: number;
+}
+
+// 완료 또는 취소되어 닫힌 카드 여부 (완료 숨김 토글 대상)
+function isClosedCard(card: Card): boolean {
+  return !!card.completed_at || !!card.cancelled_at;
+}
+
+// 오늘 진행 중인 첫 카드(없으면 가장 가까운 예정 카드)를 세로 스크롤 목표로 찾는다
+function findTodayRowCardId(nodes: TimelineNode[]): string | null {
+  const today = todayKst().format('YYYY-MM-DD');
+  const isOngoing = (card: Card) =>
+    !!card.start_date && card.start_date <= today && (!card.due_date || card.due_date >= today);
+  const target =
+    nodes.find((n) => !isClosedCard(n.card) && isOngoing(n.card)) ??
+    nodes.find((n) => !isClosedCard(n.card) && !!n.card.due_date && n.card.due_date >= today);
+  return target ? target.card.id : null;
+}
+
+// 대상 행이 화면 밖에 있으면 세로 스크롤로 노출한다 (가로 스크롤 위치는 유지)
+function scrollRowIntoView(cardId: string | null): void {
+  if (!cardId) return;
+  const row = document.querySelector(`[data-timeline-row="${cardId}"]`);
+  if (!row) return;
+  const rect = row.getBoundingClientRect();
+  if (rect.top >= 0 && rect.bottom <= window.innerHeight) return;
+  row.scrollIntoView({ block: 'center', inline: 'nearest' });
 }
 
 function buildHierarchy(cards: Card[]): TimelineNode[] {
@@ -208,7 +236,7 @@ const TimelineRow: React.FC<TimelineRowProps> = ({
   };
 
   return (
-    <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
+    <div ref={setNodeRef} style={style} data-timeline-row={card.id} {...attributes} {...listeners}>
       <span style={{ width: 60, color: '#8c8c8c' }}>{project.prefix}-{card.card_number}</span>
       <span style={{ width: 60 }}>
         <Tag
@@ -273,9 +301,10 @@ const ProjectTimelinePage: React.FC = () => {
     enabled: !!id,
   });
 
+  // 타임라인은 아카이브된 완료 카드까지 전체 이력을 조회한다 (완료 숨김 토글로 필터링)
   const { data: cards, isLoading: cardsLoading } = useQuery({
-    queryKey: ['project-cards', id],
-    queryFn: () => getProjectCards(id!),
+    queryKey: ['project-cards', id, 'all'],
+    queryFn: () => getProjectCards(id!, { include_archived: true }),
     enabled: !!id,
   });
 
@@ -305,6 +334,10 @@ const ProjectTimelinePage: React.FC = () => {
   // 좌측 패널 리사이즈 상태
   const [panelWidth, setPanelWidth] = useState(TASK_PANEL_DEFAULT_WIDTH);
   const isResizing = useRef(false);
+
+  // 간트 영역 가로 스크롤 컨테이너 (최초 진입 시 오늘 날짜 위치로 이동)
+  const ganttScrollRef = useRef<HTMLDivElement>(null);
+  const autoScrolledRef = useRef(false);
 
   // 리사이즈 핸들 마우스 다운 핸들러
   const handleResizeStart = useCallback((e: React.MouseEvent) => {
@@ -359,7 +392,7 @@ const ProjectTimelinePage: React.FC = () => {
     const collectDescendants = (parentId: string) => {
       for (const card of cards) {
         if (card.parent_id === parentId && !matchedIds.has(card.id)) {
-          if (filters.hideCompleted && card.completed_at) continue;
+          if (filters.hideCompleted && isClosedCard(card)) continue;
           matchedIds.add(card.id);
           collectDescendants(card.id);
         }
@@ -367,7 +400,7 @@ const ProjectTimelinePage: React.FC = () => {
     };
 
     for (const card of cards) {
-      if (filters.hideCompleted && card.completed_at) continue;
+      if (filters.hideCompleted && isClosedCard(card)) continue;
 
       let matches = true;
       if (filters.cardTypes.length > 0 && !filters.cardTypes.includes(card.card_type as CardType)) {
@@ -394,7 +427,7 @@ const ProjectTimelinePage: React.FC = () => {
       const card = cards.find((c) => c.id === cardId);
       if (card?.parent_id && !matchedIds.has(card.parent_id)) {
         const parentCard = cards.find((c) => c.id === card.parent_id);
-        if (parentCard && filters.hideCompleted && parentCard.completed_at) return;
+        if (parentCard && filters.hideCompleted && isClosedCard(parentCard)) return;
         matchedIds.add(card.parent_id);
         addAncestors(card.parent_id);
       }
@@ -508,8 +541,8 @@ const ProjectTimelinePage: React.FC = () => {
         if (!rangeStart) rangeStart = minDate;
         if (!rangeEnd) rangeEnd = maxDate;
       } else {
-        rangeStart = dayjs();
-        rangeEnd = dayjs().add(1, 'month');
+        rangeStart = todayKst();
+        rangeEnd = todayKst().add(1, 'month');
       }
     }
 
@@ -521,6 +554,24 @@ const ProjectTimelinePage: React.FC = () => {
 
     return { weeks: w, monthGroups: mg, flatNodes: flat, timelineStart: ts };
   }, [project, filteredCards, expandedIds]);
+
+  // 타임라인 진입 시 오늘 날짜가 보이도록 가로/세로 스크롤을 자동 이동한다 (최초 1회)
+  useEffect(() => {
+    if (autoScrolledRef.current || weeks.length === 0) return;
+    const container = ganttScrollRef.current;
+    if (!container) return;
+    const totalDays = weeks.length * 7;
+    const chartWidth = weeks.length * WEEK_COL_WIDTH;
+    const offsetDays = todayKst().diff(timelineStart, 'day');
+    if (offsetDays < 0 || offsetDays > totalDays) {
+      autoScrolledRef.current = true;
+      return;
+    }
+    const todayPx = (offsetDays / totalDays) * chartWidth;
+    container.scrollLeft = Math.max(0, todayPx - container.clientWidth / 3);
+    scrollRowIntoView(findTodayRowCardId(flatNodes));
+    autoScrolledRef.current = true;
+  }, [weeks, timelineStart, flatNodes]);
 
   const toggleExpand = (cardId: string) => {
     setExpandedIds((prev) => {
@@ -619,7 +670,7 @@ const ProjectTimelinePage: React.FC = () => {
     };
   };
 
-  const today = dayjs();
+  const today = todayKst();
   const todayOffset = today.diff(timelineStart, 'day');
   const todayLeft = (todayOffset / (weeks.length * 7)) * totalWidth;
   const showTodayLine = todayLeft >= 0 && todayLeft <= totalWidth;
@@ -634,15 +685,18 @@ const ProjectTimelinePage: React.FC = () => {
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <Title level={3} style={{ margin: 0 }}>{project.name} - Timeline</Title>
-        <Segmented
-          value="Timeline"
-          onChange={handleViewChange}
-          options={[
-            { label: 'Board', value: 'Board', icon: <AppstoreOutlined /> },
-            { label: 'Timeline', value: 'Timeline', icon: <FieldTimeOutlined /> },
-            { label: 'Settings', value: 'Settings', icon: <SettingOutlined /> },
-          ]}
-        />
+        <Space size={8}>
+          <WbsExportButton projectId={id} projectName={project.name} />
+          <Segmented
+            value="Timeline"
+            onChange={handleViewChange}
+            options={[
+              { label: 'Board', value: 'Board', icon: <AppstoreOutlined /> },
+              { label: 'Timeline', value: 'Timeline', icon: <FieldTimeOutlined /> },
+              { label: 'Settings', value: 'Settings', icon: <SettingOutlined /> },
+            ]}
+          />
+        </Space>
       </div>
 
       <BoardFilterBar
@@ -740,7 +794,7 @@ const ProjectTimelinePage: React.FC = () => {
             />
 
             {/* Right panel: Gantt chart area */}
-            <div style={{ flex: 1, overflowX: 'auto' }}>
+            <div ref={ganttScrollRef} style={{ flex: 1, overflowX: 'auto' }}>
               <div style={{ minWidth: totalWidth }}>
                 {/* Month header */}
                 <div style={{ display: 'flex', height: 28, background: '#fafafa', borderBottom: '1px solid #f0f0f0' }}>
